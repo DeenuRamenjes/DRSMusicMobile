@@ -1,0 +1,744 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  Animated,
+  StatusBar,
+  ScrollView,
+  Image,
+  Pressable,
+} from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Feather';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS } from '../constants/theme';
+import { HomeScreen } from './HomeScreen';
+import { SongsScreen } from './SongsScreen';
+import { AlbumsScreen } from './AlbumsScreen';
+import { ProfileScreen } from './ProfileScreen';
+import { SettingsScreen } from './SettingsScreen';
+import { PlaybackControls } from '../components/PlaybackControls';
+import { usePlayerStore } from '../store/usePlayerStore';
+import { useMusicStore } from '../store/useMusicStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { useNavigation } from '@react-navigation/native';
+
+const Tab = createBottomTabNavigator();
+
+// Helper to get full image URL
+const getFullImageUrl = (imageUrl: string) => {
+  if (!imageUrl) return '';
+  if (imageUrl.startsWith('http')) return imageUrl;
+  return `http://192.168.1.40:5000${imageUrl}`;
+};
+
+// Left Sidebar Component (matching web app)
+const LeftSidebar = ({ 
+  onNavigate, 
+  onOpenFriends,
+  onTabNavigate,
+  stackNavigation,
+}: { 
+  onNavigate?: () => void; 
+  onOpenFriends?: () => void;
+  onTabNavigate?: (screen: string) => void;
+  stackNavigation?: any;
+}) => {
+  const { albums, fetchAlbums, isLoading } = useMusicStore();
+  const { playAlbum } = usePlayerStore();
+  const { isAdmin } = useAuthStore();
+
+  useEffect(() => {
+    fetchAlbums();
+  }, []);
+
+  // Navigation items with Feather icon names
+  const navItems = [
+    { icon: 'home', label: 'Home', screen: 'Home' },
+    { icon: 'music', label: 'Songs', screen: 'Songs' },
+    { icon: 'disc', label: 'Albums', screen: 'Albums' },
+    { icon: 'user', label: 'Profile', screen: 'Profile' },
+    { icon: 'settings', label: 'Settings', screen: 'Settings' },
+  ];
+
+  const handleNavPress = (screen: string) => {
+    // Close sidebar and navigate via callback
+    onNavigate?.();
+    onTabNavigate?.(screen);
+  };
+
+  const handleAdminPress = () => {
+    onNavigate?.();
+    stackNavigation?.navigate('Admin');
+  };
+
+  const handleAlbumPress = async (album: any) => {
+    onNavigate?.();
+    // Navigate to Albums tab first
+    onTabNavigate?.('Albums');
+    // Set the album to view
+    useMusicStore.getState().fetchAlbumById(album._id);
+  };
+
+  return (
+    <View style={styles.sidebar}>
+      {/* Navigation Section */}
+      <View style={styles.sidebarNav}>
+        {navItems.map((item) => (
+          <TouchableOpacity
+            key={item.screen}
+            style={styles.navItem}
+            onPress={() => handleNavPress(item.screen)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.navItemContent}>
+              <Icon name={item.icon} size={20} color={COLORS.textMuted} />
+              <Text style={styles.navLabel}>{item.label}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {/* Friends Activity button - mobile only */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {
+            onNavigate?.();
+            onOpenFriends?.();
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.navItemContent}>
+            <Icon name="users" size={20} color={COLORS.textMuted} />
+            <Text style={styles.navLabel}>Friends Activity</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Admin Panel - only show for admins */}
+        {isAdmin && (
+          <TouchableOpacity
+            style={[styles.navItem, styles.adminNavItem]}
+            onPress={handleAdminPress}
+            activeOpacity={0.7}
+          >
+            <View style={styles.navItemContent}>
+              <Icon name="shield" size={20} color={COLORS.primary} />
+              <Text style={[styles.navLabel, styles.adminNavLabel]}>Admin Panel</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* Library Section */}
+      <View style={styles.librarySection}>
+        <View style={styles.libraryHeader}>
+          <View style={styles.libraryTitleContainer}>
+            <Text style={styles.libraryIcon}>📚</Text>
+            <Text style={styles.libraryTitle}>YOUR LIBRARY</Text>
+          </View>
+        </View>
+
+        <ScrollView 
+          style={styles.albumList}
+          showsVerticalScrollIndicator={false}
+        >
+          {isLoading ? (
+            // Skeleton loading
+            [...Array(5)].map((_, i) => (
+              <View key={i} style={styles.albumItemSkeleton}>
+                <View style={styles.albumImageSkeleton} />
+                <View style={styles.albumTextSkeleton}>
+                  <View style={styles.albumTitleSkeleton} />
+                  <View style={styles.albumSubtitleSkeleton} />
+                </View>
+              </View>
+            ))
+          ) : (
+            albums.map((album) => (
+              <TouchableOpacity
+                key={album._id}
+                style={styles.albumItem}
+                onPress={() => handleAlbumPress(album)}
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={{ uri: getFullImageUrl(album.imageUrl) }}
+                  style={styles.albumImage}
+                />
+                <View style={styles.albumInfo}>
+                  <Text style={styles.albumTitle} numberOfLines={1}>
+                    {album.title}
+                  </Text>
+                  <Text style={styles.albumSubtitle} numberOfLines={1}>
+                    Album • {album.artist}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  );
+};
+
+// Custom Tab Bar Component
+const CustomTabBar = ({ 
+  state, 
+  navigation,
+  isSidebarOpen,
+  setIsSidebarOpen,
+  onNavigationReady,
+}: any) => {
+  // Capture navigation ref on mount
+  useEffect(() => {
+    if (navigation && onNavigationReady) {
+      onNavigationReady(navigation);
+    }
+  }, [navigation, onNavigationReady]);
+
+  const items = [
+    { name: 'Home', icon: '🏠' },
+    { name: 'Songs', icon: '🎵' },
+    { name: 'Albums', icon: '💿' },
+    { name: 'Profile', icon: '👤' },
+    { name: 'Settings', icon: '⚙️' },
+  ];
+
+  return (
+    <View style={styles.tabBar}>
+      {items.map((item, index) => {
+        const isFocused = state.index === index;
+        
+        return (
+          <TouchableOpacity
+            key={item.name}
+            style={styles.tabItem}
+            onPress={() => navigation.navigate(item.name)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabIcon, isFocused && styles.tabIconActive]}>
+              {item.icon}
+            </Text>
+            <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+              {item.name}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+// Main Layout Component
+export const MainLayout = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isFriendsOpen, setIsFriendsOpen] = useState(false);
+  const tabNavigationRef = React.useRef<any>(null);
+  const { currentSong } = usePlayerStore();
+  const { albums, fetchAlbums } = useMusicStore();
+  const slideAnim = useState(new Animated.Value(-300))[0];
+
+  useEffect(() => {
+    fetchAlbums();
+  }, []);
+
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: isSidebarOpen ? 0 : -300,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [isSidebarOpen]);
+
+  const handleSidebarNavigate = () => {
+    setIsSidebarOpen(false);
+  };
+
+  const handleOpenFriends = () => {
+    setIsSidebarOpen(false);
+    setIsFriendsOpen(true);
+  };
+
+  const handleTabNavigate = (screen: string) => {
+    if (tabNavigationRef.current) {
+      tabNavigationRef.current.navigate(screen);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <View style={styles.sidebarOverlay}>
+          {/* Backdrop */}
+          <Pressable 
+            style={styles.backdrop}
+            onPress={() => setIsSidebarOpen(false)}
+          />
+          
+          {/* Sidebar Panel */}
+          <Animated.View 
+            style={[
+              styles.sidebarPanel,
+              { transform: [{ translateX: slideAnim }] }
+            ]}
+          >
+            {/* Sidebar Header */}
+            <View style={styles.sidebarHeader}>
+              <View style={styles.sidebarLogoContainer}>
+                <Text style={styles.sidebarLogoIcon}>🎵</Text>
+                <Text style={styles.sidebarLogoText}>DRS Music</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsSidebarOpen(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeIcon}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Sidebar Content */}
+            <LeftSidebar 
+              onNavigate={handleSidebarNavigate} 
+              onOpenFriends={handleOpenFriends}
+              onTabNavigate={handleTabNavigate}
+            />
+          </Animated.View>
+        </View>
+      )}
+
+      {/* Mobile Top Header */}
+      <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            {/* Menu Button */}
+            <TouchableOpacity
+              onPress={() => setIsSidebarOpen(true)}
+              style={styles.menuButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuIcon}>☰</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Logo */}
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerLogoText}>DRS Music</Text>
+            <Text style={styles.headerLogoIcon}>🎵</Text>
+          </View>
+
+          {/* Placeholder for symmetry */}
+          <View style={styles.headerRight} />
+        </View>
+      </SafeAreaView>
+
+      {/* Main Content - Tab Navigator (without visible tab bar) */}
+      <View style={styles.content}>
+        <Tab.Navigator
+          tabBar={(props) => {
+            // Capture navigation for sidebar use using ref (no state update during render)
+            if (!tabNavigationRef.current && props.navigation) {
+              tabNavigationRef.current = props.navigation;
+            }
+            return null;
+          }}
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
+          <Tab.Screen name="Home" component={HomeScreen} />
+          <Tab.Screen name="Songs" component={SongsScreen} />
+          <Tab.Screen name="Albums" component={AlbumsScreen} />
+          <Tab.Screen name="Profile" component={ProfileScreen} />
+          <Tab.Screen name="Settings" component={SettingsScreen} />
+        </Tab.Navigator>
+      </View>
+
+      {/* Playback Controls - Always at bottom */}
+      <PlaybackControls />
+
+      {/* Friends Activity Modal */}
+      <Modal
+        visible={isFriendsOpen}
+        animationType="fade"
+        transparent={false}
+        onRequestClose={() => setIsFriendsOpen(false)}
+      >
+        <SafeAreaView style={styles.friendsContainer}>
+          <View style={styles.friendsHeader}>
+            <TouchableOpacity
+              onPress={() => setIsFriendsOpen(false)}
+              style={styles.backButton}
+            >
+              <Text style={styles.backIcon}>←</Text>
+              <Text style={styles.backText}>Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.friendsTitle}>Friends Activity</Text>
+            <View style={{ width: 64 }} />
+          </View>
+          
+          <View style={styles.friendsContent}>
+            <Text style={styles.friendsIcon}>👥</Text>
+            <Text style={styles.friendsEmptyTitle}>No Friends Yet</Text>
+            <Text style={styles.friendsEmptyText}>
+              Connect with friends to see what they're listening to
+            </Text>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  // Header
+  headerSafeArea: {
+    backgroundColor: 'rgba(9, 9, 11, 0.8)',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(63, 63, 70, 0.3)',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  menuButton: {
+    position: 'relative',
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.full,
+  },
+  menuIcon: {
+    fontSize: 24,
+    color: COLORS.textPrimary,
+  },
+  headerCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  headerLogoText: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  headerLogoIcon: {
+    fontSize: 24,
+  },
+  headerRight: {
+    width: 40,
+  },
+
+  // Content
+  content: {
+    flex: 1,
+  },
+
+  // Tab Bar
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.background,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(63, 63, 70, 0.3)',
+    paddingBottom: SPACING.sm,
+    paddingTop: SPACING.sm,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xs,
+  },
+  tabIcon: {
+    fontSize: 20,
+    marginBottom: 2,
+  },
+  tabIconActive: {
+    // Active state maintained by color
+  },
+  tabLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+  },
+  tabLabelActive: {
+    color: COLORS.textPrimary,
+  },
+
+  // Sidebar Overlay
+  sidebarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 50,
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  sidebarPanel: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: '85%',
+    maxWidth: 320,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  sidebarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(63, 63, 70, 0.5)',
+    paddingTop: 60, // Account for status bar
+  },
+  sidebarLogoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  sidebarLogoIcon: {
+    fontSize: 32,
+  },
+  sidebarLogoText: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  closeButton: {
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: 'rgba(39, 39, 42, 0.5)',
+  },
+  closeIcon: {
+    fontSize: 20,
+    color: COLORS.textPrimary,
+  },
+
+  // Sidebar Content
+  sidebar: {
+    flex: 1,
+    backgroundColor: 'rgba(24, 24, 27, 0.8)',
+  },
+  sidebarNav: {
+    padding: SPACING.md,
+  },
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.xs,
+  },
+  navItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  navIcon: {
+    fontSize: 20,
+  },
+  navLabel: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+  },
+  navBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  navBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  divider: {
+    marginHorizontal: SPACING.md,
+    height: 1,
+    backgroundColor: 'rgba(63, 63, 70, 0.5)',
+  },
+  adminNavItem: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    marginTop: SPACING.sm,
+  },
+  adminNavLabel: {
+    color: COLORS.primary,
+  },
+
+  // Library Section
+  librarySection: {
+    flex: 1,
+    padding: SPACING.md,
+  },
+  libraryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  libraryTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  libraryIcon: {
+    fontSize: 20,
+    color: COLORS.textMuted,
+  },
+  libraryTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+  },
+  albumList: {
+    flex: 1,
+  },
+  albumItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.xs,
+  },
+  albumImage: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  albumInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  albumTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  albumSubtitle: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+
+  // Skeleton
+  albumItemSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  albumImageSkeleton: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: COLORS.zinc700,
+  },
+  albumTextSkeleton: {
+    flex: 1,
+    gap: SPACING.xs,
+  },
+  albumTitleSkeleton: {
+    height: 14,
+    width: '70%',
+    backgroundColor: COLORS.zinc700,
+    borderRadius: 4,
+  },
+  albumSubtitleSkeleton: {
+    height: 12,
+    width: '50%',
+    backgroundColor: COLORS.zinc700,
+    borderRadius: 4,
+  },
+
+  // Friends Activity
+  friendsContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  friendsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(63, 63, 70, 0.5)',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  backIcon: {
+    fontSize: 20,
+    color: COLORS.primary,
+  },
+  backText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.primary,
+  },
+  friendsTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  friendsContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  friendsIcon: {
+    fontSize: 64,
+    marginBottom: SPACING.lg,
+    opacity: 0.5,
+  },
+  friendsEmptyTitle: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+  },
+  friendsEmptyText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+  },
+});
