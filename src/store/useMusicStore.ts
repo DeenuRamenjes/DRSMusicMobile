@@ -59,6 +59,7 @@ interface MusicState {
     // Albums
     albums: Album[];
     currentAlbum: Album | null;
+    pendingAlbumId: string | null; // For navigating to specific album from sidebar
 
     // Stats
     stats: Stats;
@@ -85,6 +86,8 @@ interface MusicState {
     deleteAlbum: (id: string) => Promise<void>;
     updateAlbum: (id: string, formData: FormData) => Promise<void>;
     assignSongsToAlbum: (albumId: string, songIds: string[]) => Promise<void>;
+    setPendingAlbumId: (id: string | null) => void;
+    clearPendingAlbumId: () => void;
 
     // Stats Actions
     fetchStats: () => Promise<void>;
@@ -110,6 +113,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     currentSong: null,
     albums: [],
     currentAlbum: null,
+    pendingAlbumId: null,
     stats: {
         totalSongs: 0,
         totalAlbums: 0,
@@ -472,4 +476,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
     // Clear error
     clearError: () => set({ error: null }),
+
+    // Set pending album ID for navigation
+    setPendingAlbumId: (id: string | null) => set({ pendingAlbumId: id }),
+
+    // Clear pending album ID
+    clearPendingAlbumId: () => set({ pendingAlbumId: null }),
 }));

@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS, ACCENT_COLORS } from '../constants/theme';
 import { useAuthStore } from '../store/useAuthStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useThemeStore } from '../store/useThemeStore';
 import axiosInstance from '../api/axios';
 
 // Toggle Component - iOS Style
@@ -157,7 +158,24 @@ const SelectOption = ({
 export const SettingsScreen = () => {
   const navigation = useNavigation();
   const { user, logout, isAuthenticated } = useAuthStore();
-  const { audioQuality, setAudioQuality, crossfade, toggleCrossfade } = usePlayerStore();
+  const { 
+    audioQuality, 
+    setAudioQuality, 
+    crossfade, 
+    toggleCrossfade,
+    isShuffle,
+    isLooping,
+    toggleShuffle,
+    toggleLoop,
+  } = usePlayerStore();
+  
+  const {
+    accentColor: themeAccentColor,
+    compactMode: themeCompactMode,
+    setAccentColor: setThemeAccentColor,
+    setCompactMode: setThemeCompactMode,
+    colors: themeColors,
+  } = useThemeStore();
   
   const [settings, setSettings] = useState({
     emailNotifications: true,
@@ -171,6 +189,8 @@ export const SettingsScreen = () => {
     crossfade: false,
     gaplessPlayback: true,
     normalizeVolume: false,
+    shuffle: false,
+    loop: false,
     accentColor: 'emerald',
     compactMode: false,
     layout: 'default',
@@ -196,6 +216,8 @@ export const SettingsScreen = () => {
             crossfade: bs.playback?.crossfade ?? prev.crossfade,
             gaplessPlayback: bs.playback?.gaplessPlayback ?? prev.gaplessPlayback,
             normalizeVolume: bs.playback?.normalizeVolume ?? prev.normalizeVolume,
+            shuffle: bs.playback?.shuffle ?? prev.shuffle,
+            loop: bs.playback?.loop ?? prev.loop,
             accentColor: bs.display?.accentColor || prev.accentColor,
             compactMode: bs.display?.compactMode ?? prev.compactMode,
             layout: bs.display?.layout || prev.layout,
@@ -211,7 +233,23 @@ export const SettingsScreen = () => {
             friendActivity: bs.notifications?.friendActivity ?? prev.friendActivity,
           }));
           
+          // Sync player store with backend settings
           if (bs.playback?.audioQuality) setAudioQuality(bs.playback.audioQuality);
+          // Sync shuffle/loop only if they differ from current state
+          if (bs.playback?.shuffle !== undefined && bs.playback.shuffle !== isShuffle) {
+            toggleShuffle();
+          }
+          if (bs.playback?.loop !== undefined && bs.playback.loop !== isLooping) {
+            toggleLoop();
+          }
+          
+          // Sync theme store with backend settings
+          if (bs.display?.accentColor) {
+            setThemeAccentColor(bs.display.accentColor);
+          }
+          if (bs.display?.compactMode !== undefined) {
+            setThemeCompactMode(bs.display.compactMode);
+          }
         }
       } catch (error) {
         console.warn('Failed to load settings:', error);
@@ -236,7 +274,9 @@ export const SettingsScreen = () => {
             audioQuality: updated.audioQuality, 
             crossfade: updated.crossfade, 
             gaplessPlayback: updated.gaplessPlayback, 
-            normalizeVolume: updated.normalizeVolume 
+            normalizeVolume: updated.normalizeVolume,
+            shuffle: updated.shuffle,
+            loop: updated.loop,
           },
           display: { 
             accentColor: updated.accentColor, 
@@ -272,8 +312,15 @@ export const SettingsScreen = () => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
     
+    // Sync player store with settings changes
     if (key === 'audioQuality') setAudioQuality(value);
     if (key === 'crossfade' && value !== crossfade) toggleCrossfade();
+    if (key === 'shuffle' && value !== isShuffle) toggleShuffle();
+    if (key === 'loop' && value !== isLooping) toggleLoop();
+    
+    // Sync theme store with settings changes
+    if (key === 'accentColor') setThemeAccentColor(value);
+    if (key === 'compactMode') setThemeCompactMode(value);
     
     saveSettings(updated);
   };
@@ -388,6 +435,12 @@ export const SettingsScreen = () => {
               ]}
               onChange={(v) => update('audioQuality', v)}
             />
+          </SettingItem>
+          <SettingItem label="Shuffle">
+            <Toggle enabled={isShuffle} onChange={() => update('shuffle', !isShuffle)} />
+          </SettingItem>
+          <SettingItem label="Repeat">
+            <Toggle enabled={isLooping} onChange={() => update('loop', !isLooping)} />
           </SettingItem>
           <SettingItem label="Crossfade">
             <Toggle enabled={settings.crossfade} onChange={() => update('crossfade', !settings.crossfade)} />

@@ -21,6 +21,7 @@ import { AlbumsScreen } from './AlbumsScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { PlaybackControls } from '../components/PlaybackControls';
+import { FriendsActivity } from '../components/FriendsActivity';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useMusicStore } from '../store/useMusicStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -49,10 +50,12 @@ const LeftSidebar = ({
 }) => {
   const { albums, fetchAlbums, isLoading } = useMusicStore();
   const { playAlbum } = usePlayerStore();
-  const { isAdmin } = useAuthStore();
 
+  // Only fetch albums on mount if not already loaded
   useEffect(() => {
-    fetchAlbums();
+    if (albums.length === 0) {
+      fetchAlbums();
+    }
   }, []);
 
   // Navigation items with Feather icon names
@@ -70,17 +73,21 @@ const LeftSidebar = ({
     onTabNavigate?.(screen);
   };
 
-  const handleAdminPress = () => {
-    onNavigate?.();
-    stackNavigation?.navigate('Admin');
-  };
+
 
   const handleAlbumPress = async (album: any) => {
     onNavigate?.();
-    // Navigate to Albums tab first
+    // Set the pending album ID so AlbumsScreen opens that album
+    useMusicStore.getState().setPendingAlbumId(album._id);
+    // Navigate to Albums tab
     onTabNavigate?.('Albums');
-    // Set the album to view
-    useMusicStore.getState().fetchAlbumById(album._id);
+  };
+
+  const handleViewAllAlbums = () => {
+    onNavigate?.();
+    // Clear any pending album so we see the full list
+    useMusicStore.getState().clearPendingAlbumId();
+    onTabNavigate?.('Albums');
   };
 
   return (
@@ -116,19 +123,6 @@ const LeftSidebar = ({
           </View>
         </TouchableOpacity>
 
-        {/* Admin Panel - only show for admins */}
-        {isAdmin && (
-          <TouchableOpacity
-            style={[styles.navItem, styles.adminNavItem]}
-            onPress={handleAdminPress}
-            activeOpacity={0.7}
-          >
-            <View style={styles.navItemContent}>
-              <Icon name="shield" size={20} color={COLORS.primary} />
-              <Text style={[styles.navLabel, styles.adminNavLabel]}>Admin Panel</Text>
-            </View>
-          </TouchableOpacity>
-        )}
       </View>
 
       {/* Divider */}
@@ -141,6 +135,12 @@ const LeftSidebar = ({
             <Text style={styles.libraryIcon}>📚</Text>
             <Text style={styles.libraryTitle}>YOUR LIBRARY</Text>
           </View>
+          {/* <TouchableOpacity 
+            onPress={handleViewAllAlbums}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.viewAllText}>View All</Text>
+          </TouchableOpacity> */}
         </View>
 
         <ScrollView 
@@ -240,6 +240,7 @@ export const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const tabNavigationRef = React.useRef<any>(null);
+  const stackNavigation = useNavigation();
   const { currentSong } = usePlayerStore();
   const { albums, fetchAlbums } = useMusicStore();
   const slideAnim = useState(new Animated.Value(-300))[0];
@@ -310,6 +311,7 @@ export const MainLayout = () => {
               onNavigate={handleSidebarNavigate} 
               onOpenFriends={handleOpenFriends}
               onTabNavigate={handleTabNavigate}
+              stackNavigation={stackNavigation}
             />
           </Animated.View>
         </View>
@@ -368,30 +370,12 @@ export const MainLayout = () => {
       {/* Friends Activity Modal */}
       <Modal
         visible={isFriendsOpen}
-        animationType="fade"
+        animationType="slide"
         transparent={false}
         onRequestClose={() => setIsFriendsOpen(false)}
       >
         <SafeAreaView style={styles.friendsContainer}>
-          <View style={styles.friendsHeader}>
-            <TouchableOpacity
-              onPress={() => setIsFriendsOpen(false)}
-              style={styles.backButton}
-            >
-              <Text style={styles.backIcon}>←</Text>
-              <Text style={styles.backText}>Back</Text>
-            </TouchableOpacity>
-            <Text style={styles.friendsTitle}>Friends Activity</Text>
-            <View style={{ width: 64 }} />
-          </View>
-          
-          <View style={styles.friendsContent}>
-            <Text style={styles.friendsIcon}>👥</Text>
-            <Text style={styles.friendsEmptyTitle}>No Friends Yet</Text>
-            <Text style={styles.friendsEmptyText}>
-              Connect with friends to see what they're listening to
-            </Text>
-          </View>
+          <FriendsActivity onClose={() => setIsFriendsOpen(false)} />
         </SafeAreaView>
       </Modal>
     </View>
@@ -590,15 +574,7 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(63, 63, 70, 0.5)',
   },
-  adminNavItem: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-    marginTop: SPACING.sm,
-  },
-  adminNavLabel: {
-    color: COLORS.primary,
-  },
+
 
   // Library Section
   librarySection: {
@@ -625,6 +601,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textMuted,
     letterSpacing: 1,
+  },
+  viewAllText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
   albumList: {
     flex: 1,

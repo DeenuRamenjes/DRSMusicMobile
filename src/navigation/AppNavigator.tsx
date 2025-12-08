@@ -6,8 +6,9 @@ import { StatusBar, ActivityIndicator, View, Text, StyleSheet } from 'react-nati
 import { LandingScreen } from '../screens/LandingScreen';
 import { MainLayout } from '../screens/MainLayout';
 import { SongDetailScreen } from '../screens/SongDetailScreen';
-import { AdminScreen } from '../screens/AdminScreen';
+import { ChatScreen } from '../screens/ChatScreen';
 import { useAuthStore } from '../store/useAuthStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { COLORS } from '../constants/theme';
 
 const Stack = createStackNavigator();
@@ -15,9 +16,11 @@ const Stack = createStackNavigator();
 // Main App Navigator
 export const AppNavigator = () => {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { loadTheme } = useThemeStore();
 
   useEffect(() => {
     checkAuth();
+    loadTheme(); // Load theme settings from storage
   }, []);
 
   if (isLoading) {
@@ -55,10 +58,10 @@ export const AppNavigator = () => {
           }}
         />
         <Stack.Screen 
-          name="Admin" 
-          component={AdminScreen}
+          name="Chat" 
+          component={ChatScreen}
           options={{
-            presentation: 'card',
+            gestureDirection: 'horizontal',
           }}
         />
       </Stack.Navigator>

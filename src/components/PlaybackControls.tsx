@@ -1,16 +1,17 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  PanResponder,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS } from '../constants/theme';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useMusicStore } from '../store/useMusicStore';
+import { useThemeStore } from '../store/useThemeStore';
 
 const formatTime = (time: number) => {
   if (!time || isNaN(time)) return '0:00';
@@ -18,6 +19,9 @@ const formatTime = (time: number) => {
   const seconds = Math.floor(time % 60);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
+
+// Flag to prevent multiple initializations
+let hasInitializedPlayer = false;
 
 export const PlaybackControls = () => {
   const navigation = useNavigation();
@@ -36,9 +40,61 @@ export const PlaybackControls = () => {
     toggleShuffle,
     toggleLoop,
     seekTo,
+    setCurrentSong,
+    restoreLastSong,
+    setQueue,
   } = usePlayerStore();
 
-  const { likedSongs, likeSong, unlikeSong } = useMusicStore();
+  const { songs, likedSongs, likeSong, unlikeSong, fetchSongs } = useMusicStore();
+  const { colors: themeColors, compactMode } = useThemeStore();
+
+  // Restore last song or load a random song on mount
+  useEffect(() => {
+    const initializePlayer = async () => {
+      // Only initialize once
+      if (hasInitializedPlayer) return;
+      hasInitializedPlayer = true;
+
+      // First try to restore the last song
+      await restoreLastSong();
+      
+      // Check if we have a current song now
+      const state = usePlayerStore.getState();
+      if (state.currentSong) {
+        // We restored a song, done
+        return;
+      }
+
+      // No last song, wait for songs to load and set a random one
+      // This will be triggered by the songs.length dependency below
+    };
+
+    initializePlayer();
+  }, []);
+
+  // Once songs are loaded, if no current song, set a random one (without playing)
+  useEffect(() => {
+    const setRandomSongIfNeeded = () => {
+      const state = usePlayerStore.getState();
+      
+      // Only set if no song is loaded and we have songs
+      if (!state.currentSong && songs.length > 0 && hasInitializedPlayer) {
+        const randomIndex = Math.floor(Math.random() * songs.length);
+        const randomSong = songs[randomIndex];
+        if (randomSong && randomSong.audioUrl) {
+          setQueue(songs);
+          setCurrentSong(randomSong); // This sets without playing
+        }
+      }
+    };
+
+    if (songs.length > 0) {
+      setRandomSongIfNeeded();
+    } else if (!songs.length) {
+      // Fetch songs if not loaded yet
+      fetchSongs();
+    }
+  }, [songs.length]);
 
   const isSongLiked = currentSong ? likedSongs.some(s => s._id === currentSong._id) : false;
 
@@ -65,16 +121,6 @@ export const PlaybackControls = () => {
     });
   };
 
-  if (!currentSong) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No song playing</Text>
-      </View>
-    );
-  }
-
-  const progressPercent = duration ? (currentTime / duration) * 100 : 0;
-
   // Get full image URL
   const getFullImageUrl = (imageUrl: string) => {
     if (!imageUrl) return '';
@@ -82,9 +128,16 @@ export const PlaybackControls = () => {
     return `http://192.168.1.40:5000${imageUrl}`;
   };
 
+  // Show nothing if no song (will auto-load soon)
+  if (!currentSong) {
+    return null;
+  }
+
+  const progressPercent = duration ? (currentTime / duration) * 100 : 0;
+
   return (
     <View style={styles.container}>
-      {/* Mobile Progress Bar - Thin line at top */}
+      {/* Progress Bar - at top of controls */}
       <TouchableOpacity
         ref={progressRef}
         style={styles.progressBarContainer}
@@ -92,7 +145,7 @@ export const PlaybackControls = () => {
         activeOpacity={1}
       >
         <View style={styles.progressBarBackground}>
-          <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+          <View style={[styles.progressBarFill, { width: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
         </View>
       </TouchableOpacity>
 
@@ -111,13 +164,9 @@ export const PlaybackControls = () => {
               />
             ) : (
               <View style={[styles.albumArt, styles.albumArtPlaceholder]}>
-                <Text style={styles.albumArtEmoji}>🎵</Text>
+                <Icon name="music" size={20} color={COLORS.textMuted} />
               </View>
             )}
-            {/* Expand overlay on hover */}
-            <View style={styles.expandOverlay}>
-              <Text style={styles.expandIcon}>⤢</Text>
-            </View>
           </View>
           <View style={styles.songDetails}>
             <Text style={styles.songTitle} numberOfLines={1}>
@@ -138,9 +187,11 @@ export const PlaybackControls = () => {
               style={styles.controlButton}
               activeOpacity={0.7}
             >
-              <Text style={[styles.controlIcon, isShuffle && styles.controlActive]}>
-                ⤮
-              </Text>
+              <Icon 
+                name="shuffle" 
+                size={18} 
+                color={isShuffle ? themeColors.primary : COLORS.textMuted} 
+              />
             </TouchableOpacity>
 
             {/* Previous */}
@@ -149,18 +200,21 @@ export const PlaybackControls = () => {
               style={styles.controlButton}
               activeOpacity={0.7}
             >
-              <Text style={styles.prevNextIcon}>⏮</Text>
+              <Icon name="skip-back" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
 
             {/* Play/Pause */}
             <TouchableOpacity
               onPress={togglePlayPause}
-              style={styles.playButton}
+              style={[styles.playButton, { backgroundColor: themeColors.primary }]}
               activeOpacity={0.8}
             >
-              <Text style={styles.playIcon}>
-                {isPlaying ? '⏸' : '▶'}
-              </Text>
+              <Icon 
+                name={isPlaying ? 'pause' : 'play'} 
+                size={22} 
+                color={COLORS.textPrimary}
+                style={!isPlaying && styles.playIconOffset}
+              />
             </TouchableOpacity>
 
             {/* Next */}
@@ -169,7 +223,7 @@ export const PlaybackControls = () => {
               style={styles.controlButton}
               activeOpacity={0.7}
             >
-              <Text style={styles.prevNextIcon}>⏭</Text>
+              <Icon name="skip-forward" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
 
             {/* Loop */}
@@ -178,9 +232,11 @@ export const PlaybackControls = () => {
               style={styles.controlButton}
               activeOpacity={0.7}
             >
-              <Text style={[styles.controlIcon, isLooping && styles.controlActive]}>
-                ↻
-              </Text>
+              <Icon 
+                name="repeat" 
+                size={18} 
+                color={isLooping ? themeColors.primary : COLORS.textMuted} 
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -192,9 +248,11 @@ export const PlaybackControls = () => {
             style={styles.likeButton}
             activeOpacity={0.7}
           >
-            <Text style={[styles.likeIcon, isSongLiked && styles.likeActive]}>
-              {isSongLiked ? '♥' : '♡'}
-            </Text>
+            <Icon 
+              name="heart" 
+              size={20} 
+              color={isSongLiked ? '#f43f5e' : COLORS.textMuted} 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -202,7 +260,7 @@ export const PlaybackControls = () => {
             style={styles.expandButton}
             activeOpacity={0.7}
           >
-            <Text style={styles.expandButtonIcon}>⤢</Text>
+            <Icon name="maximize-2" size={18} color={COLORS.textMuted} />
           </TouchableOpacity>
         </View>
       </View>
@@ -216,18 +274,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(24, 24, 27, 0.95)',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-  },
-  emptyContainer: {
-    height: DIMENSIONS.playbackHeight,
-    backgroundColor: 'rgba(24, 24, 27, 0.95)',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: COLORS.textMuted,
-    fontSize: FONT_SIZES.md,
   },
   progressBarContainer: {
     position: 'absolute',
@@ -243,7 +289,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: 3,
-    backgroundColor: COLORS.textPrimary,
+    backgroundColor: COLORS.primary,
   },
   content: {
     flex: 1,
@@ -251,46 +297,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
     paddingTop: 3,
-    gap: SPACING.md,
   },
   songInfo: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
-    flex: 1,
     minWidth: 0,
   },
   imageContainer: {
     position: 'relative',
   },
   albumArt: {
-    width: DIMENSIONS.playbackImageSize,
-    height: DIMENSIONS.playbackImageSize,
+    width: 48,
+    height: 48,
     borderRadius: BORDER_RADIUS.md,
   },
   albumArtPlaceholder: {
-    backgroundColor: COLORS.zinc700,
+    backgroundColor: COLORS.zinc800,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  albumArtEmoji: {
-    fontSize: 24,
-  },
-  expandOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  expandIcon: {
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    opacity: 0,
   },
   songDetails: {
     flex: 1,
@@ -298,7 +324,7 @@ const styles = StyleSheet.create({
   },
   songTitle: {
     fontSize: FONT_SIZES.md,
-    fontWeight: '500',
+    fontWeight: '600',
     color: COLORS.textPrimary,
   },
   songArtist: {
@@ -307,9 +333,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   controls: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexShrink: 0,
+    marginHorizontal: SPACING.sm,
   },
   controlButtons: {
     flexDirection: 'row',
@@ -319,28 +344,15 @@ const styles = StyleSheet.create({
   controlButton: {
     padding: SPACING.sm,
   },
-  controlIcon: {
-    fontSize: 16,
-    color: COLORS.textMuted,
-  },
-  controlActive: {
-    color: COLORS.primary,
-  },
-  prevNextIcon: {
-    fontSize: 20,
-    color: COLORS.textMuted,
-  },
   playButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.textPrimary,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  playIcon: {
-    fontSize: 18,
-    color: COLORS.background,
+  playIconOffset: {
     marginLeft: 2,
   },
   rightControls: {
@@ -351,18 +363,9 @@ const styles = StyleSheet.create({
   likeButton: {
     padding: SPACING.sm,
   },
-  likeIcon: {
-    fontSize: 20,
-    color: COLORS.textMuted,
-  },
-  likeActive: {
-    color: COLORS.like,
-  },
   expandButton: {
     padding: SPACING.sm,
   },
-  expandButtonIcon: {
-    fontSize: 20,
-    color: COLORS.textMuted,
-  },
 });
+
+export default PlaybackControls;

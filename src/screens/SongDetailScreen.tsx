@@ -10,14 +10,17 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS } from '../constants/theme';
+import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '../constants/theme';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useMusicStore } from '../store/useMusicStore';
+import { useThemeStore } from '../store/useThemeStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Album art sizing based on screen width
-const ALBUM_ART_SIZE = Math.min(SCREEN_WIDTH - SPACING.xxl * 2, DIMENSIONS.albumArtMobile);
+const ALBUM_ART_SIZE = Math.min(SCREEN_WIDTH - SPACING.xxl * 2, 320);
 
 // Helper to get full image URL
 const getFullImageUrl = (imageUrl: string) => {
@@ -40,9 +43,14 @@ export const SongDetailScreen = () => {
     isLooping,
     toggleShuffle,
     toggleLoop,
+    seekTo,
   } = usePlayerStore();
 
+  const { likedSongs, likeSong, unlikeSong } = useMusicStore();
+  const { colors: themeColors } = useThemeStore();
+
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const isSongLiked = currentSong ? likedSongs.some(s => s._id === currentSong._id) : false;
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -54,7 +62,6 @@ export const SongDetailScreen = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      // If we can't go back, navigate to MainLayout
       (navigation as any).reset({
         index: 0,
         routes: [{ name: 'MainLayout' }],
@@ -62,11 +69,26 @@ export const SongDetailScreen = () => {
     }
   };
 
+  const handleToggleLike = async () => {
+    if (!currentSong) return;
+    if (isSongLiked) {
+      await unlikeSong(currentSong._id);
+    } else {
+      await likeSong(currentSong._id);
+    }
+  };
+
   if (!currentSong) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.noSongText}>No song playing</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Icon name="music" size={64} color={COLORS.textMuted} />
+          <Text style={styles.noSongText}>No song playing</Text>
+          <TouchableOpacity style={styles.goBackButton} onPress={handleBack}>
+            <Text style={styles.goBackText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -79,12 +101,11 @@ export const SongDetailScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Text style={styles.backIcon}>‹</Text>
-          <Text style={styles.backText}>Back</Text>
+          <Icon name="chevron-down" size={28} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>NOW PLAYING</Text>
         <TouchableOpacity style={styles.menuButton}>
-          <Text style={styles.menuIcon}>⋮</Text>
+          <Icon name="more-vertical" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
       </View>
 
@@ -102,22 +123,21 @@ export const SongDetailScreen = () => {
             />
           ) : (
             <View style={[styles.albumArt, styles.albumArtPlaceholder]}>
-              <Text style={styles.albumArtEmoji}>♪</Text>
+              <Icon name="music" size={64} color={COLORS.textMuted} />
             </View>
           )}
         </View>
 
-        {/* Now Playing Label (Mobile) */}
-        <Text style={styles.nowPlayingLabel}>NOW PLAYING</Text>
-
         {/* Song Info */}
-        <Text style={styles.songTitle}>{currentSong.title}</Text>
-        <Text style={styles.songArtist}>{currentSong.artist}</Text>
+        <View style={styles.songInfoContainer}>
+          <Text style={styles.songTitle} numberOfLines={2}>{currentSong.title}</Text>
+          <Text style={styles.songArtist} numberOfLines={1}>{currentSong.artist}</Text>
+        </View>
 
         {/* Progress Bar */}
         <View style={styles.progressSection}>
           <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
             <View style={[styles.progressHandle, { left: `${progressPercent}%` }]} />
           </View>
           <View style={styles.timeContainer}>
@@ -129,42 +149,60 @@ export const SongDetailScreen = () => {
         {/* Main Controls */}
         <View style={styles.mainControls}>
           <TouchableOpacity
-            style={[styles.secondaryButton, isShuffle && styles.activeButton]}
+            style={styles.secondaryButton}
             onPress={toggleShuffle}
           >
-            <Text style={[styles.secondaryIcon, isShuffle && styles.activeIcon]}>⤮</Text>
+            <Icon 
+              name="shuffle" 
+              size={22} 
+              color={isShuffle ? themeColors.primary : COLORS.textMuted} 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.controlButton} onPress={playPrevious}>
-            <Text style={styles.controlIcon}>⏮</Text>
+            <Icon name="skip-back" size={32} color={COLORS.textPrimary} />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.playButton} onPress={togglePlayPause}>
-            <Text style={styles.playButtonIcon}>{isPlaying ? '❚❚' : '▶'}</Text>
+            <Icon 
+              name={isPlaying ? 'pause' : 'play'} 
+              size={32} 
+              color={COLORS.background} 
+              style={!isPlaying && styles.playIconOffset}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.controlButton} onPress={playNext}>
-            <Text style={styles.controlIcon}>⏭</Text>
+            <Icon name="skip-forward" size={32} color={COLORS.textPrimary} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.secondaryButton, isLooping && styles.activeButton]}
+            style={styles.secondaryButton}
             onPress={toggleLoop}
           >
-            <Text style={[styles.secondaryIcon, isLooping && styles.activeIcon]}>↻</Text>
+            <Icon 
+              name="repeat" 
+              size={22} 
+              color={isLooping ? themeColors.primary : COLORS.textMuted} 
+            />
           </TouchableOpacity>
         </View>
 
         {/* Bottom Actions */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Text style={styles.actionIcon}>♡</Text>
+          <TouchableOpacity style={styles.actionButton} onPress={handleToggleLike}>
+            <Icon 
+              name="heart" 
+              size={24} 
+              color={isSongLiked ? '#f43f5e' : COLORS.textMuted}
+              style={isSongLiked && { backgroundColor: 'transparent' }}
+            />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton}>
-            <Text style={styles.actionIcon}>🔊</Text>
+            <Icon name="volume-2" size={24} color={COLORS.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton}>
-            <Text style={styles.actionIcon}>☰</Text>
+            <Icon name="list" size={24} color={COLORS.textMuted} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -177,10 +215,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING.lg,
+  },
   noSongText: {
     color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 100,
+    fontSize: FONT_SIZES.lg,
+  },
+  goBackButton: {
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: BORDER_RADIUS.full,
+  },
+  goBackText: {
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
@@ -190,103 +244,94 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backIcon: {
-    fontSize: 20,
-    color: COLORS.primary,
-    marginRight: SPACING.xs,
-  },
-  backText: {
-    fontSize: FONT_SIZES.md,
-    color: COLORS.primary,
-    fontWeight: '500',
+    padding: SPACING.sm,
+    marginLeft: -SPACING.sm,
   },
   headerTitle: {
-    fontSize: FONT_SIZES.xs,
+    fontSize: FONT_SIZES.md,
     fontWeight: '600',
     color: COLORS.textMuted,
     letterSpacing: 2,
   },
   menuButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuIcon: {
-    fontSize: 24,
-    color: COLORS.textMuted,
+    padding: SPACING.sm,
+    marginRight: -SPACING.sm,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    alignItems: 'center',
     paddingHorizontal: SPACING.xxl,
     paddingBottom: SPACING.xxl,
+    alignItems: 'center',
   },
   albumArtContainer: {
-    marginTop: SPACING.xl,
+    marginTop: SPACING.lg,
     marginBottom: SPACING.xxl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 25 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 20,
   },
   albumArt: {
     width: ALBUM_ART_SIZE,
     height: ALBUM_ART_SIZE,
     borderRadius: BORDER_RADIUS.xl,
+    marginTop: SPACING.xxxl,
   },
   albumArtPlaceholder: {
-    backgroundColor: COLORS.backgroundTertiary,
+    backgroundColor: COLORS.zinc800,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  albumArtEmoji: {
-    fontSize: 80,
-  },
-  nowPlayingLabel: {
-    fontSize: FONT_SIZES.xs,
-    fontWeight: '500',
-    color: COLORS.textDim,
-    letterSpacing: 3,
-    marginBottom: SPACING.md,
+  songInfoContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: SPACING.xxxl,
   },
   songTitle: {
-    fontSize: FONT_SIZES.title,
+    fontSize: 28,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
+    height:80,
     textAlign: 'center',
     marginBottom: SPACING.sm,
   },
   songArtist: {
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.lg,
     color: COLORS.textMuted,
     textAlign: 'center',
-    marginBottom: SPACING.xxl,
   },
   progressSection: {
     width: '100%',
+    marginTop: SPACING.xxxl,
     marginBottom: SPACING.xxl,
   },
   progressBar: {
-    height: 4,
-    backgroundColor: COLORS.backgroundTertiary,
-    borderRadius: 2,
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 3,
     position: 'relative',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: COLORS.textPrimary,
-    borderRadius: 2,
+    backgroundColor: COLORS.primary,
+    borderRadius: 3,
   },
   progressHandle: {
     position: 'absolute',
-    top: -4,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    top: -5,
+    width: 16,
+    height: 16,
     backgroundColor: COLORS.textPrimary,
-    marginLeft: -6,
+    borderRadius: 8,
+    marginLeft: -8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   timeContainer: {
     flexDirection: 'row',
@@ -296,6 +341,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.textMuted,
+    fontWeight: '500',
   },
   mainControls: {
     flexDirection: 'row',
@@ -303,57 +349,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING.lg,
     marginBottom: SPACING.xxl,
+    width: '100%',
   },
   secondaryButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryIcon: {
-    fontSize: 20,
-    opacity: 0.6,
-    color: COLORS.textMuted,
-  },
-  activeButton: {
-    opacity: 1,
-  },
-  activeIcon: {
-    color: COLORS.primary,
-    opacity: 1,
+    padding: SPACING.md,
   },
   controlButton: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  controlIcon: {
-    fontSize: 28,
+    padding: SPACING.sm,
   },
   playButton: {
-    width: DIMENSIONS.playButtonLarge,
-    height: DIMENSIONS.playButtonLarge,
-    borderRadius: DIMENSIONS.playButtonLarge / 2,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: COLORS.textPrimary,
     justifyContent: 'center',
     alignItems: 'center',
+    marginHorizontal: SPACING.md,
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  playButtonIcon: {
-    fontSize: 28,
+  playIconOffset: {
+    marginLeft: 4,
   },
   bottomActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.xxxl,
+    gap: SPACING.xxl,
+    width: '100%',
   },
   actionButton: {
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionIcon: {
-    fontSize: 24,
+    padding: SPACING.md,
   },
 });
+
+export default SongDetailScreen;

@@ -31,7 +31,6 @@ const removeToken = async (): Promise<void> => {
 interface AuthState {
     isAuthenticated: boolean;
     isLoading: boolean;
-    isAdmin: boolean;
     user: AuthUser | null;
     error: string | null;
 
@@ -39,7 +38,6 @@ interface AuthState {
     login: (userData: any, token: string) => void;
     logout: () => void;
     checkAuth: () => Promise<void>;
-    checkAdminStatus: () => Promise<void>;
     setIsLoading: (loading: boolean) => void;
     reset: () => void;
 }
@@ -47,7 +45,6 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
     isAuthenticated: false,
     isLoading: true,
-    isAdmin: false,
     user: null,
     error: null,
 
@@ -74,9 +71,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isLoading: false,
             error: null,
         });
-
-        // Check admin status after login
-        get().checkAdminStatus();
     },
 
     logout: () => {
@@ -84,7 +78,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({
             isAuthenticated: false,
             user: null,
-            isAdmin: false,
             isLoading: false,
             error: null,
         });
@@ -121,9 +114,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     user,
                     isLoading: false,
                 });
-
-                // Check admin status
-                get().checkAdminStatus();
             } else {
                 set({ isAuthenticated: false, isLoading: false, user: null });
             }
@@ -140,43 +130,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
     },
 
-    checkAdminStatus: async () => {
-        set({ isLoading: true, error: null });
-
-        const state = get();
-        const userEmail = state.user?.emailAddress || '';
-
-        // List of admin emails - must match ADMIN_EMAILS in backend .env
-        const adminEmails = [
-            'deenuramenjes29@gmail.com',
-            // Add more admin emails as needed
-        ];
-
-        // Try backend check first
-        try {
-            const response = await axiosInstance.get('/admin/check');
-            set({ isAdmin: response.data.admin || false, isLoading: false });
-            return;
-        } catch (error: any) {
-            // Backend auth failed (likely 401) - check locally by email
-            const isAdmin = adminEmails.some(
-                email => email.toLowerCase() === userEmail.toLowerCase()
-            );
-            set({
-                isAdmin,
-                isLoading: false,
-                error: null
-            });
-        }
-    },
-
     setIsLoading: (loading: boolean) => set({ isLoading: loading }),
 
     reset: () => {
         set({
             isAuthenticated: false,
             isLoading: false,
-            isAdmin: false,
             user: null,
             error: null,
         });

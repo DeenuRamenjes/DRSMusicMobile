@@ -153,28 +153,32 @@ export const LandingScreen = () => {
     setIsSigningIn(true);
     
     try {
-      const demoUserId = 'demo_user_' + Date.now();
+      // Use the mobile auth endpoint to get a proper token
+      const response = await axiosInstance.post('/auth/mobile', {
+        email: 'demo@drsmusic.com',
+        name: 'DRS User',
+        imageUrl: '',
+      });
 
-      try {
-        await axiosInstance.post('/auth/callback', {
-          id: demoUserId,
-          fullName: 'Demo User',
-          imageUrl: '',
-        });
-      } catch (err) {
-        console.log('Backend sync skipped');
+      const { user, token } = response.data;
+
+      if (!user || !token) {
+        throw new Error('Invalid response from auth server');
       }
 
+      console.log('✅ Mobile auth successful:', user.email);
+
+      // Login with the real token from backend
       login(
         {
-          id: demoUserId,
-          clerkId: demoUserId,
-          name: 'DRS Admin',
-          fullName: 'DRS Admin',
-          emailAddress: 'deenuramenjes29@gmail.com', // Admin email for testing
-          imageUrl: '',
+          id: user.id,
+          clerkId: user.clerkId,
+          name: user.name,
+          fullName: user.name,
+          emailAddress: user.email,
+          imageUrl: user.imageUrl || '',
         },
-        'demo_token'
+        token  // Use the real token from backend
       );
 
       navigation.dispatch(
@@ -184,7 +188,8 @@ export const LandingScreen = () => {
         })
       );
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to login');
+      console.error('Mobile auth error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to login');
     } finally {
       setIsSigningIn(false);
     }

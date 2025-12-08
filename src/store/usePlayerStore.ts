@@ -1,8 +1,12 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Sound from 'react-native-sound';
 import { Song } from '../types';
 import axiosInstance from '../api/axios';
+
+// Storage key for persisting last song
+const LAST_SONG_KEY = '@drs_music_last_song';
 
 // Enable playback in silence mode (iOS)
 Sound.setCategory('Playback');
@@ -79,6 +83,28 @@ const syncPlaybackToBackend = async (shuffle?: boolean, loop?: boolean, volume?:
     }, 500);
 };
 
+// Persist last song to AsyncStorage
+const saveLastSong = async (song: Song) => {
+    try {
+        await AsyncStorage.setItem(LAST_SONG_KEY, JSON.stringify(song));
+    } catch (error) {
+        console.error('Error saving last song:', error);
+    }
+};
+
+// Load last song from AsyncStorage
+const loadLastSong = async (): Promise<Song | null> => {
+    try {
+        const songJson = await AsyncStorage.getItem(LAST_SONG_KEY);
+        if (songJson) {
+            return JSON.parse(songJson) as Song;
+        }
+    } catch (error) {
+        console.error('Error loading last song:', error);
+    }
+    return null;
+};
+
 interface PlayerState {
     currentSong: Song | null;
     isPlaying: boolean;
@@ -100,6 +126,8 @@ interface PlayerState {
     // Actions
     setupPlayer: () => Promise<void>;
     playSong: (song: Song) => void;
+    setCurrentSong: (song: Song) => void; // Set song without playing
+    restoreLastSong: () => Promise<void>; // Restore last song from storage
     playAlbum: (songs: Song[], startIndex?: number) => void;
     pauseSong: () => void;
     resumeSong: () => void;
@@ -216,7 +244,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
             // Check if a different song was requested while we were loading
             if (get().currentSong?._id !== song._id) {
-                console.log('🔄 Song changed during loading, releasing this sound');
                 newSound.release();
                 return;
             }
@@ -252,6 +279,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             // Set volume
             newSound.setVolume(state.isMuted ? 0 : state.volume);
 
+            // Save the last song to storage
+            saveLastSong(song);
+
+            // Broadcast activity to friends
+            try {
+                const { useFriendsStore } = require('./useFriendsStore');
+                useFriendsStore.getState().updateActivity(song.title, song.artist);
+            } catch (e) {
+                // Friends store may not be available
+            }
+
             // Play the sound
             newSound.play((success) => {
                 if (success) {
@@ -272,6 +310,40 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
                 }
             }, 500);
         });
+    },
+
+    // Set a song as current without playing it (for UI display)
+    setCurrentSong: (song: Song) => {
+        if (!song.audioUrl) {
+            console.warn('Song has no audioUrl:', song.title);
+            return;
+        }
+
+        // Just update the state without loading/playing audio
+        set({
+            currentSong: song,
+            isPlaying: false,
+            isLoading: false,
+            currentTime: 0,
+            duration: song.duration || 0,
+        });
+
+        // Save to storage
+        saveLastSong(song);
+    },
+
+    // Restore the last played song from storage
+    restoreLastSong: async () => {
+        const lastSong = await loadLastSong();
+        if (lastSong) {
+            set({
+                currentSong: lastSong,
+                isPlaying: false,
+                isLoading: false,
+                currentTime: 0,
+                duration: lastSong.duration || 0,
+            });
+        }
     },
 
     playAlbum: (songs: Song[], startIndex = 0) => {
@@ -326,13 +398,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     togglePlayPause: () => {
-        const { isPlaying, pauseSong, resumeSong, currentSong } = get();
+        const { isPlaying, pauseSong, resumeSong, currentSong, sound, playSong } = get();
         if (!currentSong) return;
 
         if (isPlaying) {
             pauseSong();
         } else {
-            resumeSong();
+            // If no sound is loaded yet (e.g., song was set via setCurrentSong), load and play it
+            const activeSound = sound || currentSoundInstance;
+            if (!activeSound) {
+                playSong(currentSong);
+            } else {
+                resumeSong();
+            }
         }
     },
 
@@ -400,70 +478,34 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         const nextIndex = isLastIndex ? 0 : state.currentIndex + 1;
         const nextSong = state.queue[nextIndex];
 
-        if (!nextSong || !nextSong.audioUrl) {
-            // Find next valid song
-            for (let i = nextIndex; i < state.queue.length; i++) {
-                if (state.queue[i].audioUrl) {
-                    set({ currentIndex: i });
-                    get().playSong(state.queue[i]);
-                    return;
-                }
-            }
-            set({ isPlaying: false, currentTime: 0 });
-            return;
+        if (nextSong?.audioUrl) {
+            set({ currentIndex: nextIndex });
+            get().playSong(nextSong);
         }
-
-        set({ currentIndex: nextIndex });
-        get().playSong(nextSong);
     },
 
     playPrevious: () => {
         const state = get();
-        if (!state.queue.length || state.currentIndex === -1) return;
+        if (!state.queue.length) return;
 
-        if (state.isShuffle) {
-            let [nextSong, ...remainingQueue] = [...state.shuffleQueue].reverse();
-
-            if (!nextSong) {
-                if (!state.isLooping) {
-                    set({ isPlaying: false, currentTime: 0 });
-                    return;
-                }
-                const rebuilt = buildShuffleQueue(state.queue, state.currentSong?._id);
-                [nextSong, ...remainingQueue] = rebuilt.reverse();
+        // If more than 3 seconds in, restart current song
+        if (state.currentTime > 3 && state.currentSong) {
+            const { sound } = state;
+            if (sound) {
+                sound.setCurrentTime(0);
+                set({ currentTime: 0 });
             }
-
-            if (!nextSong || !nextSong.audioUrl) {
-                set({ isPlaying: false, currentTime: 0 });
-                return;
-            }
-
-            const updatedIndex = state.queue.findIndex((song) => song._id === nextSong._id);
-            set({
-                shuffleQueue: remainingQueue.reverse(),
-                currentIndex: updatedIndex !== -1 ? updatedIndex : state.currentIndex,
-            });
-            get().playSong(nextSong);
             return;
         }
 
-        // Non-shuffle mode
         const isFirstIndex = state.currentIndex === 0;
-        if (isFirstIndex && !state.isLooping) {
-            set({ isPlaying: false, currentTime: 0 });
-            return;
-        }
-
         const prevIndex = isFirstIndex ? state.queue.length - 1 : state.currentIndex - 1;
         const prevSong = state.queue[prevIndex];
 
-        if (!prevSong || !prevSong.audioUrl) {
-            set({ isPlaying: false, currentTime: 0 });
-            return;
+        if (prevSong?.audioUrl) {
+            set({ currentIndex: prevIndex });
+            get().playSong(prevSong);
         }
-
-        set({ currentIndex: prevIndex });
-        get().playSong(prevSong);
     },
 
     seekTo: async (position: number) => {
@@ -476,127 +518,64 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     setVolume: (volume: number) => {
         const { sound } = get();
+        const clampedVolume = Math.max(0, Math.min(1, volume));
         if (sound) {
-            sound.setVolume(volume);
+            sound.setVolume(clampedVolume);
         }
-        set({ volume, isMuted: volume <= 0 });
+        set({ volume: clampedVolume, isMuted: clampedVolume === 0 });
+        syncPlaybackToBackend(undefined, undefined, clampedVolume);
     },
 
     toggleMute: () => {
         const { sound, isMuted, volume } = get();
+        const newMuted = !isMuted;
         if (sound) {
-            sound.setVolume(isMuted ? volume : 0);
+            sound.setVolume(newMuted ? 0 : volume);
         }
-        set({ isMuted: !isMuted });
+        set({ isMuted: newMuted });
     },
 
     toggleShuffle: async () => {
         const state = get();
-        const nextShuffleState = !state.isShuffle;
+        const newShuffle = !state.isShuffle;
 
-        // Sync to backend
-        syncPlaybackToBackend(nextShuffleState, undefined, undefined);
+        if (newShuffle && state.queue.length > 0) {
+            const shuffled = buildShuffleQueue(state.queue, state.currentSong?._id);
+            set({ isShuffle: newShuffle, shuffleQueue: shuffled });
+        } else {
+            set({ isShuffle: newShuffle, shuffleQueue: [] });
+        }
 
-        set({
-            isShuffle: nextShuffleState,
-            shuffleQueue: nextShuffleState ? buildShuffleQueue(state.queue, state.currentSong?._id) : [],
-        });
+        syncPlaybackToBackend(newShuffle, undefined, undefined);
     },
 
     toggleLoop: async () => {
-        const nextLoopState = !get().isLooping;
-
-        // Sync to backend
-        syncPlaybackToBackend(undefined, nextLoopState, undefined);
-
-        set({ isLooping: nextLoopState });
+        const state = get();
+        const newLoop = !state.isLooping;
+        set({ isLooping: newLoop });
+        syncPlaybackToBackend(undefined, newLoop, undefined);
     },
 
     setQueue: (songs: Song[]) => {
-        const state = get();
-        const currentSongId = state.currentSong?._id;
-        const newQueue = [...songs];
-        const newIndex = currentSongId
-            ? newQueue.findIndex((song) => song._id === currentSongId)
-            : -1;
-
-        if (newQueue.length === 0) {
-            set({
-                queue: [],
-                currentIndex: -1,
-                currentSong: null,
-                isPlaying: false,
-                shuffleQueue: [],
-            });
-            return;
-        }
-
-        if (state.currentSong) {
-            if (newIndex !== -1) {
-                set({
-                    queue: newQueue,
-                    currentIndex: newIndex,
-                    shuffleQueue: state.isShuffle ? buildShuffleQueue(newQueue, state.currentSong._id) : state.shuffleQueue,
-                });
-            } else {
-                set({
-                    queue: newQueue,
-                    currentIndex: 0,
-                    currentSong: newQueue[0],
-                    isPlaying: false,
-                    shuffleQueue: state.isShuffle ? buildShuffleQueue(newQueue, newQueue[0]._id) : state.shuffleQueue,
-                });
-            }
-            return;
-        }
-
-        const randomIndex = Math.floor(Math.random() * newQueue.length);
-        const randomSong = newQueue[randomIndex];
-        set({
-            queue: newQueue,
-            currentIndex: randomIndex,
-            currentSong: randomSong,
-            isPlaying: false,
-            shuffleQueue: state.isShuffle ? buildShuffleQueue(newQueue, randomSong._id) : state.shuffleQueue,
-        });
+        const playableSongs = songs.filter((song) => song.audioUrl);
+        set({ queue: playableSongs });
     },
 
     addToQueue: async (song: Song) => {
-        const state = get();
-        if (state.queue.some((s) => s._id === song._id)) {
-            return;
-        }
-        const updatedQueue = [...state.queue, song];
-        set({
-            queue: updatedQueue,
-            shuffleQueue: state.isShuffle ? buildShuffleQueue(updatedQueue, state.currentSong?._id) : state.shuffleQueue,
-        });
+        if (!song.audioUrl) return;
+        set((state) => ({
+            queue: [...state.queue, song],
+        }));
     },
 
     removeFromQueue: (songId: string) => {
-        const state = get();
-        const newQueue = state.queue.filter((song) => song._id !== songId);
-        const wasCurrentSong = state.currentSong?._id === songId;
-        const newIndex = wasCurrentSong ? -1 : state.currentIndex;
-        const excludeId = wasCurrentSong ? undefined : state.currentSong?._id;
-
-        set({
-            queue: newQueue,
-            currentIndex: newIndex,
-            currentSong: wasCurrentSong ? null : state.currentSong,
-            isPlaying: wasCurrentSong ? false : state.isPlaying,
-            shuffleQueue: state.isShuffle
-                ? buildShuffleQueue(newQueue, excludeId)
-                : state.shuffleQueue.filter((song) => song._id !== songId),
-        });
+        set((state) => ({
+            queue: state.queue.filter((song) => song._id !== songId),
+        }));
     },
 
     clearQueue: () => {
-        const { sound } = get();
-        if (sound) {
-            sound.stop();
-            sound.release();
-        }
+        stopAndReleaseCurrentSound();
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
@@ -604,10 +583,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         set({
             queue: [],
             currentIndex: -1,
+            shuffleQueue: [],
             currentSong: null,
             isPlaying: false,
             currentTime: 0,
-            shuffleQueue: [],
+            duration: 0,
             sound: null,
         });
     },
@@ -616,7 +596,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         set({ currentTime: position, duration });
     },
 
-    setIsPlaying: (isPlaying: boolean) => set({ isPlaying }),
+    setIsPlaying: (isPlaying: boolean) => {
+        set({ isPlaying });
+    },
 
     setAudioQuality: (quality: 'low' | 'normal' | 'high') => {
         set({ audioQuality: quality });
@@ -629,36 +611,33 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     loadSettingsFromBackend: async () => {
         try {
             const response = await axiosInstance.get('/users/me/settings');
-            const settings = response.data;
-
-            if (settings?.playback) {
+            const settings = response.data?.playback;
+            if (settings) {
                 set({
-                    isShuffle: settings.playback.shuffle ?? false,
-                    isLooping: settings.playback.loop ?? true,
-                    volume: settings.playback.volume ?? 0.7,
-                    audioQuality: settings.playback.audioQuality ?? 'high',
-                    crossfade: settings.playback.crossfade ?? false,
+                    isShuffle: settings.shuffle ?? false,
+                    isLooping: settings.loop ?? true,
+                    volume: settings.volume ?? 0.7,
+                    audioQuality: settings.quality ?? 'high',
+                    crossfade: settings.crossfade ?? false,
                 });
             }
         } catch (error) {
-            console.warn('Failed to load settings from backend:', error);
+            // Silently fail
         }
     },
 
     cleanup: () => {
-        const { sound } = get();
-        if (sound) {
-            sound.stop();
-            sound.release();
-        }
+        stopAndReleaseCurrentSound();
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
         }
         set({
-            sound: null,
+            currentSong: null,
             isPlaying: false,
             currentTime: 0,
+            duration: 0,
+            sound: null,
         });
     },
 }));

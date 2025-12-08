@@ -129,13 +129,9 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
               style={styles.detailAlbumImage}
             />
             <Text style={styles.detailAlbumTitle}>{displayAlbum?.title}</Text>
-            <View style={styles.detailAlbumMeta}>
-              <Text style={styles.detailAlbumArtist}>{displayAlbum?.artist}</Text>
-              <Text style={styles.detailMetaSeparator}>•</Text>
-              <Text style={styles.detailAlbumInfo}>{displayAlbum?.songs?.length || 0} songs</Text>
-              <Text style={styles.detailMetaSeparator}>•</Text>
-              <Text style={styles.detailAlbumInfo}>{displayAlbum?.releaseYear}</Text>
-            </View>
+            <Text style={styles.detailAlbumArtist}>
+              {displayAlbum?.artist} • {displayAlbum?.songs?.length || 0} songs • {displayAlbum?.releaseYear}
+            </Text>
           </View>
 
           {/* Play Button */}
@@ -217,12 +213,23 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
 // Main Albums Screen
 export const AlbumsScreen = () => {
   const navigation = useNavigation();
-  const { albums, isLoading, fetchAlbums } = useMusicStore();
+  const { albums, isLoading, fetchAlbums, pendingAlbumId, clearPendingAlbumId } = useMusicStore();
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
 
   useEffect(() => {
     fetchAlbums();
   }, []);
+
+  // Handle pending album navigation from sidebar
+  useEffect(() => {
+    if (pendingAlbumId && albums.length > 0) {
+      const album = albums.find(a => a._id === pendingAlbumId);
+      if (album) {
+        setSelectedAlbum(album);
+        clearPendingAlbumId();
+      }
+    }
+  }, [pendingAlbumId, albums]);
 
   const handleAlbumPress = (album: Album) => {
     setSelectedAlbum(album);

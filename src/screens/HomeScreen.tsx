@@ -9,12 +9,18 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '../constants/theme';
 import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { Song } from '../types';
+
+// Import the DRS logo
+const DRSLogo = require('../assets/DRS.png');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
@@ -279,7 +285,11 @@ const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps)
 
 // Main HomeScreen Component
 export const HomeScreen = () => {
+  const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useAuthStore();
   const {
     fetchFeaturedSongs,
     fetchMadeForYouSongs,
@@ -296,6 +306,11 @@ export const HomeScreen = () => {
   } = useMusicStore();
 
   const { currentSong, setQueue, queue } = usePlayerStore();
+
+  const handleProfilePress = () => {
+    // Navigate to Profile tab - for now just log
+    console.log('Profile pressed');
+  };
 
   useEffect(() => {
     const fetchSongs = async () => {
@@ -360,26 +375,79 @@ export const HomeScreen = () => {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={COLORS.primary}
-          colors={[COLORS.primary]}
+    <View style={styles.screenContainer}>
+      {/* Top Bar */}
+      <View style={styles.topBar}>
+        {/* Left: Logo */}
+        <View style={styles.topBarLeft}>
+          <Image source={DRSLogo} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.logoText}>DRS Music</Text>
+        </View>
+
+        {/* Right: Search and Profile */}
+        <View style={styles.topBarRight}>
+          <TouchableOpacity 
+            style={styles.topBarIcon}
+            onPress={() => setSearchVisible(!searchVisible)}
+          >
+            <Icon name="search" size={22} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={handleProfilePress}
+          >
+            {user?.imageUrl ? (
+              <Image source={{ uri: user.imageUrl }} style={styles.profileImage} />
+            ) : (
+              <View style={styles.profilePlaceholder}>
+                <Icon name="user" size={18} color={COLORS.textMuted} />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Search Bar - Expandable */}
+      {searchVisible && (
+        <View style={styles.searchContainer}>
+          <Icon name="search" size={18} color={COLORS.textMuted} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search songs, albums, artists..."
+            placeholderTextColor={COLORS.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoFocus
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Icon name="x" size={18} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
+        {/* Liked Songs Section */}
+        <SectionGrid
+          title="Liked Songs"
+          songs={likedSongs}
+          isLoading={likedSongsLoading || !likedSongsInitialized}
+          viewAllPath="/likes"
         />
-      }
-    >
-      {/* Liked Songs Section */}
-      <SectionGrid
-        title="Liked Songs"
-        songs={likedSongs}
-        isLoading={likedSongsLoading || !likedSongsInitialized}
-        viewAllPath="/likes"
-      />
 
       {/* Featured Section */}
       <FeaturedSection />
@@ -401,10 +469,85 @@ export const HomeScreen = () => {
       {/* Bottom spacing for playback controls */}
       <View style={{ height: DIMS.playbackHeight + SPACING.xl }} />
     </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  screenContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.zinc800,
+  },
+  topBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logo: {
+    width: 32,
+    height: 32,
+  },
+  logoText: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginLeft: SPACING.sm,
+  },
+  topBarIcon: {
+    padding: 8,
+  },
+  profileButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
+  },
+  profilePlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
+    backgroundColor: COLORS.zinc800,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.zinc800,
+    marginHorizontal: SPACING.md,
+    marginVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  searchIcon: {
+    marginRight: SPACING.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textPrimary,
+    padding: 0,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

@@ -69,7 +69,7 @@ export const ProfileScreen = () => {
   const navigation = useNavigation();
   const { albums, likedSongs, likedSongsLoading, likedSongsInitialized, fetchLikedSongs } = useMusicStore();
   const { currentSong, isPlaying, playSong, pauseSong } = usePlayerStore();
-  const { user, isAuthenticated, isAdmin } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   
   const [stats, setStats] = useState({
     totalSongs: 0,
@@ -169,12 +169,7 @@ export const ProfileScreen = () => {
                   Joined {new Date(user.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                 </Text>
               </View>
-              {isAdmin && (
-                <View style={styles.adminBadge}>
-                  <Text style={styles.adminIcon}>✨</Text>
-                  <Text style={styles.adminText}>Admin</Text>
-                </View>
-              )}
+
             </View>
           </View>
         </View>
@@ -465,23 +460,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     color: COLORS.textMuted,
   },
-  adminBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.full,
-  },
-  adminIcon: {
-    fontSize: 12,
-  },
-  adminText: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '500',
-    color: COLORS.primary,
-  },
+
 
   // Stats Grid
   statsGrid: {
