@@ -111,28 +111,33 @@ export const LandingScreen = () => {
     setIsSigningIn(true);
     
     try {
-      // Sync with backend
-      try {
-        await axiosInstance.post('/auth/callback', {
-          id: userData.id,
-          fullName: userData.name,
-          imageUrl: userData.imageUrl,
-        });
-        console.log('Backend sync OK');
-      } catch (err) {
-        console.log('Backend sync skipped:', err);
+      // Get a proper mobile token from the backend
+      const response = await axiosInstance.post('/auth/mobile', {
+        email: userData.email || '',
+        name: userData.name,
+        imageUrl: userData.imageUrl,
+        clerkId: userData.id, // Pass Clerk ID for sync
+      });
+
+      const { user, token } = response.data;
+
+      if (!user || !token) {
+        throw new Error('Invalid response from auth server');
       }
 
+      console.log('✅ Mobile auth successful:', user.email);
+
+      // Login with the real token from backend
       login(
         {
-          id: userData.id,
-          clerkId: userData.id,
-          name: userData.name,
-          fullName: userData.name,
-          emailAddress: userData.email,
-          imageUrl: userData.imageUrl,
+          id: user.id || user._id,
+          clerkId: user.clerkId || userData.id,
+          name: user.name || userData.name,
+          fullName: user.fullName || userData.name,
+          emailAddress: user.email || userData.email,
+          imageUrl: user.imageUrl || userData.imageUrl,
         },
-        'clerk_session_token' // Placeholder token
+        token
       );
 
       navigation.dispatch(
@@ -142,6 +147,7 @@ export const LandingScreen = () => {
         })
       );
     } catch (error: any) {
+      console.error('Auth error:', error);
       Alert.alert('Error', 'Failed to complete sign in');
     } finally {
       setIsSigningIn(false);

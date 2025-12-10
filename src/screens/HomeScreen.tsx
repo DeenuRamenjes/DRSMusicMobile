@@ -17,20 +17,15 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '
 import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import { Song } from '../types';
+import { getFullImageUrl } from '../config';
 
 // Import the DRS logo
 const DRSLogo = require('../assets/DRS.png');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
-
-// Helper to get full image URL
-const getFullImageUrl = (imageUrl: string) => {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `http://192.168.1.40:5000${imageUrl}`;
-};
 
 // Featured Section Component - Horizontal cards like web app
 const FeaturedSection = () => {
@@ -283,6 +278,152 @@ const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps)
   );
 };
 
+// Offline Mode View Component
+const OfflineModeView = () => {
+  const { downloadedSongs, deviceSongs, isScanning, scanDeviceMusic, loadDownloadedSongs } = useOfflineMusicStore();
+  const { playSong, setQueue, currentSong, isPlaying } = usePlayerStore();
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  const allOfflineSongs = [...downloadedSongs, ...deviceSongs];
+
+  useEffect(() => {
+    loadDownloadedSongs();
+  }, []);
+
+  const handlePlaySong = (song: any, index: number) => {
+    setQueue(allOfflineSongs as any);
+    playSong({
+      ...song,
+      audioUrl: song.localPath ? `file://${song.localPath}` : song.audioUrl,
+    });
+  };
+
+  const renderGridItem = (song: any, index: number) => {
+    const isCurrentSong = currentSong?._id === song._id;
+    return (
+      <TouchableOpacity 
+        key={song._id} 
+        style={[styles.offlineGridItem, isCurrentSong && styles.offlineGridItemActive]}
+        onPress={() => handlePlaySong(song, index)}
+      >
+        <View style={styles.offlineGridImage}>
+          {song.imageUrl ? (
+            <Image source={{ uri: getFullImageUrl(song.imageUrl) }} style={styles.offlineGridImageContent} />
+          ) : (
+            <View style={styles.offlineGridPlaceholder}>
+              <Icon name="music" size={32} color={COLORS.textMuted} />
+            </View>
+          )}
+          <View style={styles.offlinePlayOverlay}>
+            <Icon name={isCurrentSong && isPlaying ? "pause" : "play"} size={20} color="#fff" />
+          </View>
+        </View>
+        <Text style={styles.offlineGridTitle} numberOfLines={1}>{song.title}</Text>
+        <Text style={styles.offlineGridArtist} numberOfLines={1}>{song.artist}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderListItem = (song: any, index: number) => {
+    const isCurrentSong = currentSong?._id === song._id;
+    return (
+      <TouchableOpacity 
+        key={song._id} 
+        style={[styles.offlineListItem, isCurrentSong && styles.offlineListItemActive]}
+        onPress={() => handlePlaySong(song, index)}
+      >
+        <View style={styles.offlineListImage}>
+          {song.imageUrl ? (
+            <Image source={{ uri: getFullImageUrl(song.imageUrl) }} style={styles.offlineListImageContent} />
+          ) : (
+            <View style={styles.offlineListPlaceholder}>
+              <Icon name="music" size={24} color={COLORS.textMuted} />
+            </View>
+          )}
+        </View>
+        <View style={styles.offlineListInfo}>
+          <Text style={[styles.offlineListTitle, isCurrentSong && { color: COLORS.primary }]} numberOfLines={1}>
+            {song.title}
+          </Text>
+          <Text style={styles.offlineListArtist} numberOfLines={1}>{song.artist}</Text>
+        </View>
+        <TouchableOpacity style={styles.offlineListPlay} onPress={() => handlePlaySong(song, index)}>
+          <Icon name={isCurrentSong && isPlaying ? "pause" : "play"} size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={styles.screenContainer}>
+      {/* Header */}
+      <View style={styles.offlineHeader}>
+        <Text style={styles.offlineTitle}>Offline Music</Text>
+        <View style={styles.offlineHeaderActions}>
+          {/* View Mode Toggle */}
+          <View style={styles.viewModeToggle}>
+            <TouchableOpacity
+              style={[styles.viewModeBtn, viewMode === 'grid' && styles.viewModeBtnActive]}
+              onPress={() => setViewMode('grid')}
+            >
+              <Icon name="grid" size={18} color={viewMode === 'grid' ? COLORS.primary : COLORS.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewModeBtn, viewMode === 'list' && styles.viewModeBtnActive]}
+              onPress={() => setViewMode('list')}
+            >
+              <Icon name="list" size={18} color={viewMode === 'list' ? COLORS.primary : COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* Scan Button */}
+      <TouchableOpacity
+        style={styles.scanButton}
+        onPress={() => scanDeviceMusic()}
+        disabled={isScanning}
+      >
+        {isScanning ? (
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        ) : (
+          <Icon name="search" size={18} color={COLORS.primary} />
+        )}
+        <Text style={styles.scanButtonText}>
+          {isScanning ? 'Scanning...' : 'Scan for Music'}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Song Count */}
+      <Text style={styles.offlineSongCount}>
+        {downloadedSongs.length} downloaded • {deviceSongs.length} from device
+      </Text>
+
+      {/* Content */}
+      {allOfflineSongs.length === 0 ? (
+        <View style={styles.offlineEmpty}>
+          <Icon name="music" size={64} color={COLORS.textMuted} />
+          <Text style={styles.offlineEmptyTitle}>No Offline Songs</Text>
+          <Text style={styles.offlineEmptyText}>
+            Download songs or scan your device for local music files
+          </Text>
+        </View>
+      ) : (
+        <ScrollView 
+          contentContainerStyle={viewMode === 'grid' ? styles.offlineGridContainer : styles.offlineListContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {viewMode === 'grid' 
+            ? allOfflineSongs.map((song, index) => renderGridItem(song, index))
+            : allOfflineSongs.map((song, index) => renderListItem(song, index))
+          }
+          <View style={{ height: DIMS.playbackHeight + SPACING.xl }} />
+        </ScrollView>
+      )}
+    </View>
+  );
+};
+
 // Main HomeScreen Component
 export const HomeScreen = () => {
   const navigation = useNavigation();
@@ -306,6 +447,7 @@ export const HomeScreen = () => {
   } = useMusicStore();
 
   const { currentSong, setQueue, queue } = usePlayerStore();
+  const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
 
   const handleProfilePress = () => {
     // Navigate to Profile tab - for now just log
@@ -313,6 +455,9 @@ export const HomeScreen = () => {
   };
 
   useEffect(() => {
+    // Skip fetching if in offline mode
+    if (isOfflineMode) return;
+    
     const fetchSongs = async () => {
       try {
         await Promise.all([
@@ -326,10 +471,16 @@ export const HomeScreen = () => {
       }
     };
     fetchSongs();
-  }, []);
+  }, [isOfflineMode]);
 
   useEffect(() => {
-    if (!isLoading) {
+    // In offline mode, use downloaded songs for queue
+    if (isOfflineMode && downloadedSongs.length > 0) {
+      setQueue(downloadedSongs as any);
+      return;
+    }
+    
+    if (!isLoading && !isOfflineMode) {
       const allSongs = [
         ...madeForYouSongs,
         ...featuredSongs,
@@ -341,9 +492,10 @@ export const HomeScreen = () => {
         setQueue(allSongs);
       }
     }
-  }, [isLoading, madeForYouSongs, featuredSongs, trendingSongs, likedSongs, setQueue, currentSong, queue.length]);
+  }, [isLoading, madeForYouSongs, featuredSongs, trendingSongs, likedSongs, setQueue, currentSong, queue.length, isOfflineMode, downloadedSongs]);
 
   const onRefresh = async () => {
+    if (isOfflineMode) return; // Don't refresh in offline mode
     setRefreshing(true);
     await Promise.all([
       fetchFeaturedSongs(),
@@ -354,7 +506,8 @@ export const HomeScreen = () => {
     setRefreshing(false);
   };
 
-  if (error) {
+  // Don't show error in offline mode
+  if (error && !isOfflineMode) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>Error loading songs</Text>
@@ -366,13 +519,19 @@ export const HomeScreen = () => {
     );
   }
 
-  if (isLoading && !refreshing) {
+  if (isLoading && !refreshing && !isOfflineMode) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
+
+  // ============= OFFLINE MODE UI =============
+  if (isOfflineMode) {
+    return <OfflineModeView />;
+  }
+  // ============= END OFFLINE MODE UI =============
 
   return (
     <View style={styles.screenContainer}>
@@ -811,5 +970,192 @@ const styles = StyleSheet.create({
     height: 12,
     backgroundColor: COLORS.zinc700,
     borderRadius: 4,
+  },
+  // Offline Mode Styles
+  offlineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.zinc800,
+  },
+  offlineTitle: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  offlineHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  viewModeToggle: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.zinc800,
+    borderRadius: BORDER_RADIUS.md,
+    padding: 2,
+  },
+  viewModeBtn: {
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  viewModeBtnActive: {
+    backgroundColor: COLORS.zinc700,
+  },
+  scanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.zinc800,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  scanButtonText: {
+    color: COLORS.primary,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+  },
+  offlineSongCount: {
+    textAlign: 'center',
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZES.sm,
+    marginVertical: SPACING.md,
+  },
+  offlineEmpty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.xl,
+  },
+  offlineEmptyTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginTop: SPACING.lg,
+  },
+  offlineEmptyText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: SPACING.sm,
+  },
+  offlineGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: SPACING.md,
+    gap: SPACING.md,
+  },
+  offlineGridItem: {
+    width: CARD_WIDTH,
+    backgroundColor: COLORS.backgroundCard,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  offlineGridItemActive: {
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  offlineGridImage: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+    marginBottom: SPACING.sm,
+  },
+  offlineGridImageContent: {
+    width: '100%',
+    height: '100%',
+  },
+  offlineGridPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: COLORS.zinc700,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlinePlayOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineGridTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  offlineGridArtist: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  offlineListContainer: {
+    paddingHorizontal: SPACING.lg,
+  },
+  offlineListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.zinc800,
+  },
+  offlineListItemActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    marginHorizontal: -SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    borderBottomWidth: 0,
+  },
+  offlineListImage: {
+    width: 56,
+    height: 56,
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+  },
+  offlineListImageContent: {
+    width: '100%',
+    height: '100%',
+  },
+  offlineListPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: COLORS.zinc700,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineListInfo: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  offlineListTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  offlineListArtist: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  offlineListPlay: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.zinc800,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

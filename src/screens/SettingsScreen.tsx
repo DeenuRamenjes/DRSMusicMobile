@@ -478,6 +478,17 @@ export const SettingsScreen = () => {
         {/* DOWNLOADS */}
         <SectionHeader icon="📥" title="DOWNLOADS" />
         <Section>
+          <TouchableOpacity 
+            style={[styles.settingItem, styles.settingItemBorder]}
+            onPress={() => (navigation as any).navigate('OfflineMusic')}
+          >
+            <Text style={styles.settingLabel}>Offline Music</Text>
+            <View style={styles.settingValue}>
+              <Text style={[styles.settingValueText, { color: COLORS.primary }]}>
+                Manage →
+              </Text>
+            </View>
+          </TouchableOpacity>
           <SettingItem label="Download Quality">
             <SelectOption
               value={settings.downloadQuality}
@@ -685,7 +696,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.primary,
+    // backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -693,7 +704,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
     color: COLORS.textMuted,
     letterSpacing: 1,

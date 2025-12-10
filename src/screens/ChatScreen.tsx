@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Vibration,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -20,15 +20,9 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useFriendsStore, formatRelativeTime } from '../store/useFriendsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { User, Message } from '../types';
+import { getFullImageUrl } from '../config';
 
 type ChatScreenRouteProp = RouteProp<{ Chat: { user: User } }, 'Chat'>;
-
-// Helper to get full image URL
-const getFullImageUrl = (imageUrl: string) => {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `http://192.168.1.40:5000${imageUrl}`;
-};
 
 // Format time for messages
 const formatMessageTime = (dateString: string) => {
@@ -119,6 +113,8 @@ export const ChatScreen = () => {
     onlineUsers,
     userActivities,
     setSelectedUser,
+    setChatScreenActive,
+    clearUnreadCount,
   } = useFriendsStore();
 
   const [messageText, setMessageText] = useState('');
@@ -129,6 +125,10 @@ export const ChatScreen = () => {
   const currentUserId = authUser?.clerkId || authUser?.id || '';
   const chatUserId = chatUser.clerkId || chatUser._id;
 
+  console.log('🔍 ChatScreen IDs:', { currentUserId, chatUserId });
+  console.log('🔍 authUser:', authUser);
+  console.log('🔍 chatUser:', chatUser);
+
   // Check if user is online
   const isOnline = onlineUsers.has(chatUserId);
   const activity = userActivities.get(chatUserId);
@@ -137,11 +137,17 @@ export const ChatScreen = () => {
   // Set selected user and fetch messages
   useEffect(() => {
     setSelectedUser(chatUser);
+    setChatScreenActive(true);
+    clearUnreadCount(chatUserId);
+    
     if (chatUserId) {
+      console.log('📨 Fetching messages for:', chatUserId);
       fetchMessages(chatUserId);
     }
+    
     return () => {
       setSelectedUser(null);
+      setChatScreenActive(false);
     };
   }, [chatUserId]);
 
@@ -159,7 +165,12 @@ export const ChatScreen = () => {
     
     sendMessage(chatUserId, currentUserId, messageText.trim());
     setMessageText('');
-    Vibration.vibrate(10);
+    Keyboard.dismiss();
+    
+    // Scroll to bottom after sending
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   }, [messageText, chatUserId, currentUserId, sendMessage]);
 
   const handleBack = () => {
@@ -190,7 +201,7 @@ export const ChatScreen = () => {
       <MessageBubble
         message={item}
         isOwn={isOwn}
-        avatarUrl={isOwn ? (authUser?.imageUrl || '') : chatUser.imageUrl}
+        avatarUrl={isOwn ? (authUser?.imageUrl || '') : (chatUser.imageUrl || '')}
         themeColor={themeColors.primary}
       />
     );
@@ -252,8 +263,8 @@ export const ChatScreen = () => {
       {/* Messages */}
       <KeyboardAvoidingView
         style={styles.messagesContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
       >
         {isLoading ? (
           <View style={styles.loadingContainer}>

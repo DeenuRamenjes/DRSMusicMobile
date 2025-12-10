@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   ScrollView,
   Dimensions,
   StatusBar,
+  GestureResponderEvent,
+  LayoutRectangle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -16,29 +18,24 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useMusicStore } from '../store/useMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { getFullImageUrl } from '../config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Album art sizing based on screen width
 const ALBUM_ART_SIZE = Math.min(SCREEN_WIDTH - SPACING.xxl * 2, 320);
 
-// Helper to get full image URL
-const getFullImageUrl = (imageUrl: string) => {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `http://192.168.1.40:5000${imageUrl}`;
-};
-
 export const SongDetailScreen = () => {
   const navigation = useNavigation();
+  
   const {
     currentSong,
     isPlaying,
+    currentTime,
+    duration,
     togglePlayPause,
     playNext,
     playPrevious,
-    currentTime,
-    duration,
     isShuffle,
     isLooping,
     toggleShuffle,
@@ -52,10 +49,31 @@ export const SongDetailScreen = () => {
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   const isSongLiked = currentSong ? likedSongs.some(s => s._id === currentSong._id) : false;
 
+
+
+  // Ref for progress bar to measure its layout
+  const progressBarRef = useRef<View>(null);
+  const progressBarLayout = useRef<LayoutRectangle | null>(null);
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Handle seek when user taps on progress bar
+  const handleSeek = (event: GestureResponderEvent) => {
+    if (!progressBarLayout.current || duration <= 0) return;
+    
+    const { locationX } = event.nativeEvent;
+    const barWidth = progressBarLayout.current.width;
+    
+    // Calculate the seek position as a percentage
+    const seekPercent = Math.max(0, Math.min(1, locationX / barWidth));
+    const seekPosition = seekPercent * duration;
+    
+    console.log(`Seeking to ${formatTime(seekPosition)} (${Math.round(seekPercent * 100)}%)`);
+    seekTo(seekPosition);
   };
 
   const handleBack = () => {
@@ -136,10 +154,18 @@ export const SongDetailScreen = () => {
 
         {/* Progress Bar */}
         <View style={styles.progressSection}>
-          <View style={styles.progressBar}>
+          <TouchableOpacity 
+            ref={progressBarRef}
+            style={styles.progressBar}
+            onLayout={(event) => {
+              progressBarLayout.current = event.nativeEvent.layout;
+            }}
+            onPress={handleSeek}
+            activeOpacity={0.9}
+          >
             <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
-            <View style={[styles.progressHandle, { left: `${progressPercent}%` }]} />
-          </View>
+            <View style={[styles.progressHandle, { left: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
+          </TouchableOpacity>
           <View style={styles.timeContainer}>
             <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
             <Text style={styles.timeText}>{formatTime(duration)}</Text>

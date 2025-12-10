@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar, ActivityIndicator, View, Text, StyleSheet } from 'react-native';
@@ -7,8 +7,13 @@ import { LandingScreen } from '../screens/LandingScreen';
 import { MainLayout } from '../screens/MainLayout';
 import { SongDetailScreen } from '../screens/SongDetailScreen';
 import { ChatScreen } from '../screens/ChatScreen';
+import { MessagesScreen } from '../screens/MessagesScreen';
+import { OfflineMusicScreen } from '../screens/OfflineMusicScreen';
+import { ConnectionScreen } from '../components/ConnectionScreen';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { useConnectionStore } from '../store/useConnectionStore';
+import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import { COLORS } from '../constants/theme';
 
 const Stack = createStackNavigator();
@@ -17,13 +22,87 @@ const Stack = createStackNavigator();
 export const AppNavigator = () => {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
   const { loadTheme } = useThemeStore();
+  const { isConnected, checkConnection } = useConnectionStore();
+  const { loadDownloadedSongs, setOfflineMode } = useOfflineMusicStore();
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
+  const [connectionFailed, setConnectionFailed] = useState(false);
+  const [useOffline, setUseOffline] = useState(false);
 
   useEffect(() => {
-    checkAuth();
-    loadTheme(); // Load theme settings from storage
+    const init = async () => {
+      loadTheme(); // Load theme settings from storage
+      loadDownloadedSongs(); // Load offline songs
+      
+      // Always check connection to backend
+      const connected = await checkConnection();
+      setInitialCheckDone(true);
+      setConnectionFailed(!connected);
+      
+      // If connected, check auth
+      if (connected) {
+        checkAuth();
+      }
+    };
+    
+    init();
   }, []);
 
-  if (isLoading) {
+  // Update connection failed state when connection changes
+  useEffect(() => {
+    if (initialCheckDone && !useOffline) {
+      setConnectionFailed(!isConnected);
+    }
+  }, [isConnected, initialCheckDone, useOffline]);
+
+  const handleGoOffline = () => {
+    setUseOffline(true);
+    setConnectionFailed(false);
+    setInitialCheckDone(true);
+    setOfflineMode(true);
+  };
+
+  // Wait for initial connection check
+  if (!initialCheckDone) {
+    return (
+      <>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <ConnectionScreen 
+          onRetry={() => {
+            checkConnection().then((connected) => {
+              if (connected) {
+                setConnectionFailed(false);
+                checkAuth();
+              }
+            });
+          }}
+          onOfflinePress={handleGoOffline}
+        />
+      </>
+    );
+  }
+
+  // Show connection screen if connection failed (and not in offline mode)
+  if (connectionFailed && !useOffline) {
+    return (
+      <>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <ConnectionScreen 
+          onRetry={() => {
+            checkConnection().then((connected) => {
+              if (connected) {
+                setConnectionFailed(false);
+                checkAuth();
+              }
+            });
+          }}
+          onOfflinePress={handleGoOffline}
+        />
+      </>
+    );
+  }
+
+  // Only show auth loading if we're NOT in offline mode
+  if (isLoading && !useOffline) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -31,6 +110,9 @@ export const AppNavigator = () => {
       </View>
     );
   }
+
+  // In offline mode, go directly to MainLayout (skip Landing/Login)
+  const initialRoute = useOffline ? 'MainLayout' : (isAuthenticated ? 'MainLayout' : 'Landing');
 
   return (
     <NavigationContainer>
@@ -41,7 +123,7 @@ export const AppNavigator = () => {
           cardStyle: { backgroundColor: COLORS.background },
           gestureEnabled: true,
         }}
-        initialRouteName={isAuthenticated ? 'MainLayout' : 'Landing'}
+        initialRouteName={initialRoute}
       >
         <Stack.Screen 
           name="Landing" 
@@ -58,8 +140,22 @@ export const AppNavigator = () => {
           }}
         />
         <Stack.Screen 
+          name="Messages" 
+          component={MessagesScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
           name="Chat" 
           component={ChatScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="OfflineMusic" 
+          component={OfflineMusicScreen}
           options={{
             gestureDirection: 'horizontal',
           }}

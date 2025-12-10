@@ -16,15 +16,9 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '
 import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { Song, Album } from '../types';
+import { getFullImageUrl } from '../config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Helper to get full image URL
-const getFullImageUrl = (imageUrl: string) => {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `http://192.168.1.40:5000${imageUrl}`;
-};
 
 const formatDuration = (duration: number) => {
   const minutes = Math.floor(duration / 60);
@@ -118,7 +112,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
           {/* Album Header */}
           <View style={styles.detailHeader}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backIcon}>←</Text>
+              <Text style={styles.backIcon}>Back</Text>
             </TouchableOpacity>
           </View>
 
@@ -404,15 +398,13 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    width: 30,
+    height: 30,
     justifyContent: 'center',
     alignItems: 'center',
   },
   backIcon: {
-    fontSize: 24,
+    fontSize: 12,
     color: COLORS.textPrimary,
   },
 

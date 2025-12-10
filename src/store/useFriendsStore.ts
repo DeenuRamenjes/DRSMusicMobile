@@ -2,14 +2,15 @@ import { create } from 'zustand';
 import axiosInstance from '../api/axios';
 import { User, Message } from '../types';
 import { io, Socket } from 'socket.io-client';
-import { Platform } from 'react-native';
+import { Vibration } from 'react-native';
+import { SOCKET_URL } from '../config';
 
-// Backend URL for socket connection
-const BACKEND_PORT = 5000;
-const LOCAL_IP = '192.168.1.40';
-const SOCKET_URL = Platform.OS === 'android'
-    ? `http://${LOCAL_IP}:${BACKEND_PORT}`
-    : `http://localhost:${BACKEND_PORT}`;
+// Notification callback - to be set by notification service
+let notificationCallback: ((title: string, body: string, data?: any) => void) | null = null;
+
+export const setNotificationCallback = (callback: (title: string, body: string, data?: any) => void) => {
+    notificationCallback = callback;
+};
 
 interface FriendsState {
     users: User[];
@@ -22,16 +23,22 @@ interface FriendsState {
     userLastSeen: Map<string, number>;
     messages: Message[];
     selectedUser: User | null;
+    unreadCounts: Record<string, number>;
+    isChatScreenActive: boolean;
+    lastMessages: Record<string, Message>; // Last message per user
 
     // Actions
     fetchUsers: () => Promise<void>;
     fetchLastSeen: () => Promise<void>;
+    fetchLastMessages: () => Promise<void>;
     initSocket: (userId: string) => void;
     disconnectSocket: () => void;
     updateActivity: (songTitle: string, artist: string) => void;
     setSelectedUser: (user: User | null) => void;
     fetchMessages: (userId: string) => Promise<void>;
     sendMessage: (receiverId: string, senderId: string, content: string) => void;
+    setChatScreenActive: (active: boolean) => void;
+    clearUnreadCount: (userId: string) => void;
 }
 
 // Create socket instance
@@ -48,6 +55,9 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
     userLastSeen: new Map(),
     messages: [],
     selectedUser: null,
+    unreadCounts: {},
+    isChatScreenActive: false,
+    lastMessages: {},
 
     fetchUsers: async () => {
         set({ isLoading: true, error: null });
@@ -80,6 +90,33 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             }
         } catch (error) {
             console.log('Could not fetch last seen data:', error);
+        }
+    },
+
+    fetchLastMessages: async () => {
+        try {
+            const users = get().users;
+            const lastMessagesMap: Record<string, Message> = {};
+
+            // Fetch messages for each user and get the last one
+            await Promise.all(
+                users.map(async (user) => {
+                    try {
+                        const response = await axiosInstance.get(`/users/messages/${user.clerkId}`);
+                        const messages = response.data;
+                        if (messages && messages.length > 0) {
+                            // Get the last message (messages are sorted by createdAt)
+                            lastMessagesMap[user.clerkId] = messages[messages.length - 1];
+                        }
+                    } catch (error) {
+                        // Ignore errors for individual users
+                    }
+                })
+            );
+
+            set({ lastMessages: lastMessagesMap });
+        } catch (error) {
+            console.log('Could not fetch last messages:', error);
         }
     },
 
@@ -151,15 +188,44 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
         socketInstance.on('receive_message', (message: Message) => {
             const state = get();
-            const { selectedUser } = state;
-            const conversationActive =
+            const { selectedUser, users, isChatScreenActive } = state;
+            const isActiveConversation =
+                isChatScreenActive &&
                 selectedUser &&
-                (message.senderId === selectedUser.clerkId || message.receiverId === selectedUser.clerkId);
+                message.senderId === selectedUser.clerkId;
 
-            if (conversationActive) {
+            // Always add to messages if it's part of the current conversation
+            if (selectedUser &&
+                (message.senderId === selectedUser.clerkId || message.receiverId === selectedUser.clerkId)) {
                 set((prev) => ({
                     messages: [...prev.messages, message],
                 }));
+            }
+
+            // If not in active conversation with this user, show notification
+            if (!isActiveConversation) {
+                // Increment unread count
+                set((prev) => ({
+                    unreadCounts: {
+                        ...prev.unreadCounts,
+                        [message.senderId]: (prev.unreadCounts[message.senderId] || 0) + 1,
+                    },
+                }));
+
+                // Vibrate for notification
+                Vibration.vibrate(100);
+
+                // Find sender info for notification
+                const sender = users.find((u) => u.clerkId === message.senderId);
+                const senderName = sender?.name || 'New Message';
+
+                // Show notification callback if set
+                if (notificationCallback) {
+                    notificationCallback(senderName, message.content, {
+                        userId: message.senderId,
+                        messageId: message._id,
+                    });
+                }
             }
         });
 
@@ -205,11 +271,16 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
     fetchMessages: async (userId: string) => {
         set({ isLoading: true, error: null });
         try {
+            console.log('📨 Fetching messages for user:', userId);
             const response = await axiosInstance.get(`/users/messages/${userId}`);
-            set({ messages: response.data });
+            console.log('📨 Messages received:', response.data?.length || 0);
+            set({ messages: response.data || [] });
         } catch (error: any) {
-            console.error('Error fetching messages:', error);
-            set({ error: error.response?.data?.message || 'Failed to fetch messages' });
+            console.error('❌ Error fetching messages:', error);
+            set({
+                error: error.response?.data?.message || 'Failed to fetch messages',
+                messages: [] // Clear messages on error
+            });
         } finally {
             set({ isLoading: false });
         }
@@ -217,7 +288,26 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
     sendMessage: (receiverId: string, senderId: string, content: string) => {
         const socket = get().socket;
-        if (!socket) return;
+        const isConnected = get().isConnected;
+
+        console.log('📤 Sending message:', { receiverId, senderId, content: content.substring(0, 20) });
+        console.log('🔌 Socket status:', { socket: !!socket, isConnected });
+
+        if (!socket || !isConnected) {
+            console.error('❌ Cannot send message: Socket not connected');
+            // Still add message locally for UI feedback
+            const tempMessage: Message = {
+                _id: 'temp_' + Date.now().toString(),
+                senderId,
+                receiverId,
+                content,
+                createdAt: new Date().toISOString(),
+            };
+            set((state) => ({
+                messages: [...state.messages, tempMessage],
+            }));
+            return;
+        }
 
         // Create a temporary message for immediate UI update
         const tempMessage: Message = {
@@ -235,6 +325,20 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
         // Send via socket
         socket.emit('send_message', { receiverId, senderId, content });
+        console.log('✅ Message sent via socket');
+    },
+
+    setChatScreenActive: (active: boolean) => {
+        set({ isChatScreenActive: active });
+    },
+
+    clearUnreadCount: (userId: string) => {
+        set((state) => ({
+            unreadCounts: {
+                ...state.unreadCounts,
+                [userId]: 0,
+            },
+        }));
     },
 }));
 

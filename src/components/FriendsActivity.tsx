@@ -9,24 +9,23 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useFriendsStore, formatRelativeTime } from '../store/useFriendsStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { User } from '../types';
-
-// Helper to get full image URL
-const getFullImageUrl = (imageUrl?: string | null) => {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `http://192.168.1.40:5000${imageUrl}`;
-};
+import { getFullImageUrl } from '../config';
 
 interface FriendsActivityProps {
   onClose?: () => void;
 }
 
 export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
+  const navigation = useNavigation();
   const { user: authUser } = useAuthStore();
+  const { colors: themeColors } = useThemeStore();
   const {
     users,
     isLoading,
@@ -40,6 +39,12 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [, setRefreshTrigger] = useState(0);
+
+  // Handle user press - navigate to chat
+  const handleUserPress = (user: User) => {
+    onClose?.(); // Close the modal first
+    (navigation as any).navigate('Chat', { user });
+  };
 
   // Initialize socket and fetch users
   useEffect(() => {
@@ -93,7 +98,12 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
       : ['', ''];
 
     return (
-      <View key={userData._id} style={styles.userItem}>
+      <TouchableOpacity 
+        key={userData._id} 
+        style={styles.userItem}
+        onPress={() => handleUserPress(userData)}
+        activeOpacity={0.7}
+      >
         {/* Avatar with online indicator */}
         <View style={styles.avatarContainer}>
           {userData.imageUrl || userData.image ? (
@@ -109,7 +119,7 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
           <View
             style={[
               styles.onlineIndicator,
-              { backgroundColor: isOnline ? COLORS.primary : COLORS.zinc600 },
+              { backgroundColor: isOnline ? themeColors.primary : COLORS.zinc600 },
             ]}
           />
         </View>
@@ -122,16 +132,16 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
             </Text>
             {isPlaying && (
               <View style={styles.playingIndicator}>
-                <View style={[styles.playingBar, styles.playingBar1]} />
-                <View style={[styles.playingBar, styles.playingBar2]} />
-                <View style={[styles.playingBar, styles.playingBar3]} />
+                <View style={[styles.playingBar, styles.playingBar1, { backgroundColor: themeColors.primary }]} />
+                <View style={[styles.playingBar, styles.playingBar2, { backgroundColor: themeColors.primary }]} />
+                <View style={[styles.playingBar, styles.playingBar3, { backgroundColor: themeColors.primary }]} />
               </View>
             )}
           </View>
 
           {isPlaying ? (
             <View>
-              <Text style={styles.songName} numberOfLines={1}>
+              <Text style={[styles.songName, { color: themeColors.primary }]} numberOfLines={1}>
                 {songName}
               </Text>
               <Text style={styles.artistName} numberOfLines={1}>
@@ -141,7 +151,7 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
           ) : (
             <Text style={styles.statusText}>
               {isOnline ? (
-                <Text style={styles.onlineText}>Online</Text>
+                <Text style={[styles.onlineText, { color: themeColors.primary }]}>Online</Text>
               ) : lastSeenTimestamp && lastSeenTimestamp > 0 && !isNaN(lastSeenTimestamp) ? (
                 `Last seen ${formatRelativeTime(lastSeenTimestamp)}`
               ) : (
@@ -150,7 +160,15 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
             </Text>
           )}
         </View>
-      </View>
+
+        {/* Message Icon */}
+        <TouchableOpacity 
+          style={styles.messageButton}
+          onPress={() => handleUserPress(userData)}
+        >
+          <Icon name="message-circle" size={20} color={themeColors.primary} />
+        </TouchableOpacity>
+      </TouchableOpacity>
     );
   };
 
@@ -385,6 +403,11 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     maxWidth: 200,
+  },
+  messageButton: {
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
 });
 

@@ -14,17 +14,12 @@ import LinearGradient from 'react-native-linear-gradient';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '../constants/theme';
 import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import { Song } from '../types';
+import { getFullImageUrl } from '../config';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
-
-// Helper to get full image URL
-const getFullImageUrl = (imageUrl: string) => {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `http://192.168.1.40:5000${imageUrl}`;
-};
 
 const formatDuration = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
@@ -36,19 +31,27 @@ export const SongsScreen = () => {
   const navigation = useNavigation();
   const { songs, isLoading, fetchSongs } = useMusicStore();
   const { currentSong, isPlaying, playSong, pauseSong, setQueue } = usePlayerStore();
+  const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filteredSongs, setFilteredSongs] = useState<Song[]>([]);
 
   useEffect(() => {
-    fetchSongs();
-  }, []);
+    // Skip fetching if in offline mode
+    if (!isOfflineMode) {
+      fetchSongs();
+    }
+  }, [isOfflineMode]);
 
   useEffect(() => {
-    if (songs.length > 0) {
+    // Use downloaded songs when offline, otherwise use online songs
+    if (isOfflineMode) {
+      setQueue(downloadedSongs as any);
+      setFilteredSongs(downloadedSongs as any);
+    } else if (songs.length > 0) {
       setQueue(songs);
       setFilteredSongs(songs);
     }
-  }, [songs]);
+  }, [songs, isOfflineMode, downloadedSongs]);
 
   const handlePlayPause = (song: Song) => {
     if (currentSong?._id === song._id) {

@@ -3,10 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosInstance from '../api/axios';
 import { AuthUser } from '../types';
 
+// Storage keys
+const AUTH_TOKEN_KEY = 'authToken';
+const USER_DATA_KEY = 'userData';
+
 // Storage helpers using AsyncStorage
 const getToken = async (): Promise<string | null> => {
     try {
-        return await AsyncStorage.getItem('authToken');
+        return await AsyncStorage.getItem(AUTH_TOKEN_KEY);
     } catch {
         return null;
     }
@@ -14,7 +18,7 @@ const getToken = async (): Promise<string | null> => {
 
 const setToken = async (token: string): Promise<void> => {
     try {
-        await AsyncStorage.setItem('authToken', token);
+        await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
     } catch (error) {
         console.error('Failed to save token:', error);
     }
@@ -22,9 +26,35 @@ const setToken = async (token: string): Promise<void> => {
 
 const removeToken = async (): Promise<void> => {
     try {
-        await AsyncStorage.removeItem('authToken');
+        await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
     } catch (error) {
         console.error('Failed to remove token:', error);
+    }
+};
+
+// User data persistence
+const getUserData = async (): Promise<AuthUser | null> => {
+    try {
+        const data = await AsyncStorage.getItem(USER_DATA_KEY);
+        return data ? JSON.parse(data) : null;
+    } catch {
+        return null;
+    }
+};
+
+const setUserData = async (user: AuthUser): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(user));
+    } catch (error) {
+        console.error('Failed to save user data:', error);
+    }
+};
+
+const removeUserData = async (): Promise<void> => {
+    try {
+        await AsyncStorage.removeItem(USER_DATA_KEY);
+    } catch (error) {
+        console.error('Failed to remove user data:', error);
     }
 };
 
@@ -49,12 +79,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     error: null,
 
     login: (userData: any, token: string) => {
-        // Store token in AsyncStorage
-        setToken(token);
-
-        // Parse user data from Clerk format
+        // Parse user data
         const user: AuthUser = {
-            id: userData.id || userData.clerkId || '',
+            id: userData.id || userData.clerkId || userData._id || '',
             clerkId: userData.clerkId || userData.id || '',
             name: userData.name || userData.fullName || userData.firstName || '',
             fullName: userData.fullName || userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
@@ -65,35 +92,93 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             createdAt: userData.createdAt || new Date().toISOString(),
         };
 
+        // Store token and user data in AsyncStorage (fire-and-forget)
+        setToken(token);
+        setUserData(user);
+
         set({
             isAuthenticated: true,
             user,
             isLoading: false,
             error: null,
         });
+
+        console.log('✅ User logged in:', user.name || user.emailAddress);
     },
 
     logout: () => {
+        // Clear persisted data
         removeToken();
+        removeUserData();
+
         set({
             isAuthenticated: false,
             user: null,
             isLoading: false,
             error: null,
         });
+
+        console.log('👋 User logged out');
     },
 
     checkAuth: async () => {
-        const token = await getToken();
-
-        if (!token) {
-            set({ isAuthenticated: false, isLoading: false, user: null });
-            return;
-        }
-
         try {
             set({ isLoading: true });
-            // Verify token with backend
+
+            // First, check for stored token and user data
+            const [token, storedUser] = await Promise.all([
+                getToken(),
+                getUserData(),
+            ]);
+
+            if (!token) {
+                console.log('🔑 No stored token found');
+                set({ isAuthenticated: false, isLoading: false, user: null });
+                return;
+            }
+
+            // If we have stored user data and token, restore the session immediately
+            // This provides instant login experience
+            if (storedUser) {
+                console.log('✅ Restoring session for:', storedUser.name || storedUser.emailAddress);
+                set({
+                    isAuthenticated: true,
+                    user: storedUser,
+                    isLoading: false,
+                });
+
+                // Optionally verify with backend in background (don't block or logout on failure)
+                // This refreshes user data if backend is available
+                try {
+                    const response = await axiosInstance.get('/auth/me');
+                    if (response.data) {
+                        const userData = response.data;
+                        const updatedUser: AuthUser = {
+                            id: userData._id || userData.id || userData.clerkId || storedUser.id,
+                            clerkId: userData.clerkId || userData._id || storedUser.clerkId,
+                            name: userData.name || userData.fullName || storedUser.name,
+                            fullName: userData.fullName || userData.name || storedUser.fullName,
+                            username: userData.username || storedUser.username,
+                            emailAddress: userData.emailAddress || userData.email || storedUser.emailAddress,
+                            imageUrl: userData.imageUrl || userData.image || storedUser.imageUrl,
+                            createdAt: userData.createdAt || storedUser.createdAt,
+                        };
+
+                        // Update stored user data
+                        setUserData(updatedUser);
+                        set({ user: updatedUser });
+                        console.log('✅ User data refreshed from backend');
+                    }
+                } catch (error) {
+                    // Don't logout on network errors - keep using stored data
+                    console.log('⚠️ Could not refresh user data from backend (using cached)');
+                }
+
+                return;
+            }
+
+            // No stored user but have token - try to get user from backend
+            console.log('🔄 Token found, fetching user data...');
             const response = await axiosInstance.get('/auth/me');
 
             if (response.data) {
@@ -109,18 +194,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     createdAt: userData.createdAt,
                 };
 
+                // Store user data for future offline access
+                setUserData(user);
+
                 set({
                     isAuthenticated: true,
                     user,
                     isLoading: false,
                 });
+                console.log('✅ User authenticated:', user.name || user.emailAddress);
             } else {
                 set({ isAuthenticated: false, isLoading: false, user: null });
             }
         } catch (error: any) {
-            console.error('Auth check failed:', error);
-            // Token invalid, clear it
-            removeToken();
+            console.error('⚠️ Auth check error:', error.message);
+
+            // Check if we have stored user data - if so, keep the session
+            const storedUser = await getUserData();
+            if (storedUser) {
+                console.log('✅ Using cached user data despite auth error');
+                set({
+                    isAuthenticated: true,
+                    user: storedUser,
+                    isLoading: false,
+                });
+                return;
+            }
+
+            // Only logout if we truly have no valid session data
+            // Don't clear token on network errors - only on 401
+            if (error.response?.status === 401) {
+                console.log('🚫 Token invalid, clearing session');
+                removeToken();
+                removeUserData();
+            }
+
             set({
                 isAuthenticated: false,
                 isLoading: false,

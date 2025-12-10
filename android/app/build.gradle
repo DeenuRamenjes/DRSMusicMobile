@@ -84,6 +84,13 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        
+        // Disable IPO/LTO which uses gold linker (not available in NDK 27)
+        externalNativeBuild {
+            cmake {
+                arguments "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF"
+            }
+        }
     }
     signingConfigs {
         debug {

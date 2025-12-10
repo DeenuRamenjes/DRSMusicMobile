@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,26 +25,27 @@ import { FriendsActivity } from '../components/FriendsActivity';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useMusicStore } from '../store/useMusicStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { useNavigation } from '@react-navigation/native';
+import { getFullImageUrl } from '../config';
+
+
+const DRSLogo = require('../assets/DRS.png');
 
 const Tab = createBottomTabNavigator();
-
-// Helper to get full image URL
-const getFullImageUrl = (imageUrl: string) => {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `http://192.168.1.40:5000${imageUrl}`;
-};
 
 // Left Sidebar Component (matching web app)
 const LeftSidebar = ({ 
   onNavigate, 
   onOpenFriends,
+  onOpenMessages,
   onTabNavigate,
   stackNavigation,
 }: { 
   onNavigate?: () => void; 
   onOpenFriends?: () => void;
+  onOpenMessages?: () => void;
   onTabNavigate?: (screen: string) => void;
   stackNavigation?: any;
 }) => {
@@ -108,7 +109,22 @@ const LeftSidebar = ({
           </TouchableOpacity>
         ))}
 
-        {/* Friends Activity button - mobile only */}
+        {/* Messages button - Navigate to Messages screen */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {
+            onNavigate?.();
+            onOpenMessages?.();
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.navItemContent}>
+            <Icon name="message-circle" size={20} color={COLORS.textMuted} />
+            <Text style={styles.navLabel}>Messages</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Friends Activity button */}
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => {
@@ -123,6 +139,7 @@ const LeftSidebar = ({
           </View>
         </TouchableOpacity>
 
+
       </View>
 
       {/* Divider */}
@@ -133,14 +150,8 @@ const LeftSidebar = ({
         <View style={styles.libraryHeader}>
           <View style={styles.libraryTitleContainer}>
             <Text style={styles.libraryIcon}>📚</Text>
-            <Text style={styles.libraryTitle}>YOUR LIBRARY</Text>
+            <Text style={styles.libraryTitle}>PLAYLISTS</Text>
           </View>
-          {/* <TouchableOpacity 
-            onPress={handleViewAllAlbums}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.viewAllText}>View All</Text>
-          </TouchableOpacity> */}
         </View>
 
         <ScrollView 
@@ -243,11 +254,15 @@ export const MainLayout = () => {
   const stackNavigation = useNavigation();
   const { currentSong } = usePlayerStore();
   const { albums, fetchAlbums } = useMusicStore();
+  const { isOfflineMode, setOfflineMode, downloadedSongs } = useOfflineMusicStore();
+  const { colors: themeColors } = useThemeStore();
   const slideAnim = useState(new Animated.Value(-300))[0];
 
   useEffect(() => {
-    fetchAlbums();
-  }, []);
+    if (!isOfflineMode) {
+      fetchAlbums();
+    }
+  }, [isOfflineMode]);
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -264,6 +279,11 @@ export const MainLayout = () => {
   const handleOpenFriends = () => {
     setIsSidebarOpen(false);
     setIsFriendsOpen(true);
+  };
+
+  const handleOpenMessages = () => {
+    setIsSidebarOpen(false);
+    (stackNavigation as any).navigate('Messages');
   };
 
   const handleTabNavigate = (screen: string) => {
@@ -295,12 +315,11 @@ export const MainLayout = () => {
             {/* Sidebar Header */}
             <View style={styles.sidebarHeader}>
               <View style={styles.sidebarLogoContainer}>
-                <Text style={styles.sidebarLogoIcon}>🎵</Text>
+                <Image source={DRSLogo} style={styles.DRSLogo} />
                 <Text style={styles.sidebarLogoText}>DRS Music</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setIsSidebarOpen(false)}
-                style={styles.closeButton}
               >
                 <Text style={styles.closeIcon}>✕</Text>
               </TouchableOpacity>
@@ -310,6 +329,7 @@ export const MainLayout = () => {
             <LeftSidebar 
               onNavigate={handleSidebarNavigate} 
               onOpenFriends={handleOpenFriends}
+              onOpenMessages={handleOpenMessages}
               onTabNavigate={handleTabNavigate}
               stackNavigation={stackNavigation}
             />
@@ -333,12 +353,41 @@ export const MainLayout = () => {
 
           {/* Logo */}
           <View style={styles.headerCenter}>
+            <Image source={DRSLogo} style={styles.DRSLogo} />
             <Text style={styles.headerLogoText}>DRS Music</Text>
-            <Text style={styles.headerLogoIcon}>🎵</Text>
+            {isOfflineMode && (
+              <View style={[styles.offlineBadge, { backgroundColor: themeColors.primaryMuted }]}>
+                <Text style={[styles.offlineBadgeText, { color: themeColors.primary }]}>
+                  Offline
+                </Text>
+              </View>
+            )}
           </View>
 
-          {/* Placeholder for symmetry */}
-          <View style={styles.headerRight} />
+          {/* Online/Offline Toggle */}
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => {
+                const newMode = !isOfflineMode;
+                setOfflineMode(newMode);
+                // Navigate to Home tab when switching modes
+                if (tabNavigationRef.current) {
+                  tabNavigationRef.current.navigate('Home');
+                }
+              }}
+              style={[
+                styles.modeToggle,
+                { backgroundColor: isOfflineMode ? themeColors.primaryMuted : COLORS.zinc800 }
+              ]}
+              activeOpacity={0.7}
+            >
+              <Icon 
+                name={isOfflineMode ? 'wifi-off' : 'wifi'} 
+                size={16} 
+                color={isOfflineMode ? themeColors.primary : COLORS.textMuted} 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
 
@@ -388,6 +437,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
+   DRSLogo: {
+    width: 32,
+    height: 32,
+  },
+
   // Header
   headerSafeArea: {
     backgroundColor: 'rgba(9, 9, 11, 0.8)',
@@ -430,6 +484,25 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     width: 40,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  offlineBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.full,
+    marginLeft: SPACING.xs,
+  },
+  offlineBadgeText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600' as const,
+  },
+  modeToggle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
 
   // Content
@@ -501,6 +574,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(63, 63, 70, 0.5)',
     paddingTop: 60, // Account for status bar
+    backgroundColor: 'black',
   },
   sidebarLogoContainer: {
     flexDirection: 'row',
@@ -515,20 +589,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textPrimary,
   },
-  closeButton: {
-    padding: SPACING.sm,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: 'rgba(39, 39, 42, 0.5)',
-  },
+
   closeIcon: {
-    fontSize: 20,
+    fontSize: 18,
     color: COLORS.textPrimary,
   },
 
   // Sidebar Content
   sidebar: {
     flex: 1,
-    backgroundColor: 'rgba(24, 24, 27, 0.8)',
+    // backgroundColor: 'rgba(24, 24, 27, 0.8)',
+    backgroundColor: 'black',
   },
   sidebarNav: {
     padding: SPACING.md,
@@ -597,7 +668,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   libraryTitle: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
     color: COLORS.textMuted,
     letterSpacing: 1,

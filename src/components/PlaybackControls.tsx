@@ -12,13 +12,7 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS } from '../const
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useMusicStore } from '../store/useMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
-
-const formatTime = (time: number) => {
-  if (!time || isNaN(time)) return '0:00';
-  const minutes = Math.floor(time / 60);
-  const seconds = Math.floor(time % 60);
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-};
+import { getFullImageUrl } from '../config';
 
 // Flag to prevent multiple initializations
 let hasInitializedPlayer = false;
@@ -26,90 +20,51 @@ let hasInitializedPlayer = false;
 export const PlaybackControls = () => {
   const navigation = useNavigation();
   const progressRef = useRef<View>(null);
-  
+
   const {
     currentSong,
     isPlaying,
     currentTime,
     duration,
-    isShuffle,
-    isLooping,
     togglePlayPause,
     playNext,
     playPrevious,
-    toggleShuffle,
-    toggleLoop,
     seekTo,
-    setCurrentSong,
     restoreLastSong,
     setQueue,
   } = usePlayerStore();
 
-  const { songs, likedSongs, likeSong, unlikeSong, fetchSongs } = useMusicStore();
+  const { songs } = useMusicStore();
   const { colors: themeColors, compactMode } = useThemeStore();
 
-  // Restore last song or load a random song on mount
+  // Restore last song on mount (if any)
   useEffect(() => {
     const initializePlayer = async () => {
       // Only initialize once
       if (hasInitializedPlayer) return;
       hasInitializedPlayer = true;
 
-      // First try to restore the last song
+      // Try to restore the last song (for display only, not playing)
       await restoreLastSong();
-      
-      // Check if we have a current song now
-      const state = usePlayerStore.getState();
-      if (state.currentSong) {
-        // We restored a song, done
-        return;
-      }
-
-      // No last song, wait for songs to load and set a random one
-      // This will be triggered by the songs.length dependency below
     };
 
     initializePlayer();
   }, []);
 
-  // Once songs are loaded, if no current song, set a random one (without playing)
+  // Set queue when songs are loaded (but don't auto-select a song)
   useEffect(() => {
-    const setRandomSongIfNeeded = () => {
-      const state = usePlayerStore.getState();
-      
-      // Only set if no song is loaded and we have songs
-      if (!state.currentSong && songs.length > 0 && hasInitializedPlayer) {
-        const randomIndex = Math.floor(Math.random() * songs.length);
-        const randomSong = songs[randomIndex];
-        if (randomSong && randomSong.audioUrl) {
-          setQueue(songs);
-          setCurrentSong(randomSong); // This sets without playing
-        }
-      }
-    };
-
     if (songs.length > 0) {
-      setRandomSongIfNeeded();
-    } else if (!songs.length) {
-      // Fetch songs if not loaded yet
-      fetchSongs();
+      const state = usePlayerStore.getState();
+      // Only set the queue if it's empty
+      if (state.queue.length === 0) {
+        setQueue(songs);
+      }
     }
   }, [songs.length]);
-
-  const isSongLiked = currentSong ? likedSongs.some(s => s._id === currentSong._id) : false;
-
+  
   const handleOpenSongDetail = () => {
     if (!currentSong) return;
     (navigation as any).navigate('SongDetail', { songId: currentSong._id });
-  };
-
-  const handleToggleLike = async () => {
-    if (!currentSong) return;
-    if (isSongLiked) {
-      await unlikeSong(currentSong._id);
-    } else {
-      await likeSong(currentSong._id);
-    }
   };
 
   const handleProgressPress = (event: any) => {
@@ -119,13 +74,6 @@ export const PlaybackControls = () => {
       const newTime = (touchX / width) * duration;
       seekTo(Math.max(0, Math.min(newTime, duration)));
     });
-  };
-
-  // Get full image URL
-  const getFullImageUrl = (imageUrl: string) => {
-    if (!imageUrl) return '';
-    if (imageUrl.startsWith('http')) return imageUrl;
-    return `http://192.168.1.40:5000${imageUrl}`;
   };
 
   // Show nothing if no song (will auto-load soon)
@@ -181,18 +129,6 @@ export const PlaybackControls = () => {
         {/* Center: Playback Controls */}
         <View style={styles.controls}>
           <View style={styles.controlButtons}>
-            {/* Shuffle */}
-            <TouchableOpacity
-              onPress={toggleShuffle}
-              style={styles.controlButton}
-              activeOpacity={0.7}
-            >
-              <Icon 
-                name="shuffle" 
-                size={18} 
-                color={isShuffle ? themeColors.primary : COLORS.textMuted} 
-              />
-            </TouchableOpacity>
 
             {/* Previous */}
             <TouchableOpacity
@@ -225,43 +161,7 @@ export const PlaybackControls = () => {
             >
               <Icon name="skip-forward" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
-
-            {/* Loop */}
-            <TouchableOpacity
-              onPress={toggleLoop}
-              style={styles.controlButton}
-              activeOpacity={0.7}
-            >
-              <Icon 
-                name="repeat" 
-                size={18} 
-                color={isLooping ? themeColors.primary : COLORS.textMuted} 
-              />
-            </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Right: Like and Expand */}
-        <View style={styles.rightControls}>
-          <TouchableOpacity
-            onPress={handleToggleLike}
-            style={styles.likeButton}
-            activeOpacity={0.7}
-          >
-            <Icon 
-              name="heart" 
-              size={20} 
-              color={isSongLiked ? '#f43f5e' : COLORS.textMuted} 
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleOpenSongDetail}
-            style={styles.expandButton}
-            activeOpacity={0.7}
-          >
-            <Icon name="maximize-2" size={18} color={COLORS.textMuted} />
-          </TouchableOpacity>
         </View>
       </View>
     </View>
