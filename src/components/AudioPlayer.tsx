@@ -24,12 +24,9 @@ export const AudioPlayer = () => {
         duration,
         updateProgress,
         onPlaybackEnd,
-        setIsPlaying,
-        playNext,
-        playPrevious,
     } = usePlayerStore();
 
-    // Initialize MusicControl once
+    // Initialize MusicControl once - use getState() for callbacks to avoid stale closures
     useEffect(() => {
         if (isInitializedRef.current) return;
         
@@ -48,52 +45,61 @@ export const AudioPlayer = () => {
             MusicControl.enableControl('seek', true);
             MusicControl.enableControl('skipForward', false);
             MusicControl.enableControl('skipBackward', false);
+            MusicControl.enableControl('togglePlayPause', true);
             
             if (Platform.OS === 'android') {
                 MusicControl.enableControl('closeNotification', true, { when: 'paused' });
             }
             
-            // Register event handlers
+            // Register event handlers - use getState() to get fresh references
             MusicControl.on(Command.play, () => {
-                console.log('[MusicControl] Play');
-                setIsPlaying(true);
+                console.log('[MusicControl] Play command received');
+                usePlayerStore.getState().setIsPlaying(true);
             });
             
             MusicControl.on(Command.pause, () => {
-                console.log('[MusicControl] Pause');
-                setIsPlaying(false);
+                console.log('[MusicControl] Pause command received');
+                usePlayerStore.getState().setIsPlaying(false);
             });
             
             MusicControl.on(Command.stop, () => {
-                console.log('[MusicControl] Stop');
-                setIsPlaying(false);
+                console.log('[MusicControl] Stop command received');
+                usePlayerStore.getState().setIsPlaying(false);
             });
             
             MusicControl.on(Command.nextTrack, () => {
-                console.log('[MusicControl] Next');
-                playNext();
+                console.log('[MusicControl] Next track command received');
+                usePlayerStore.getState().playNext();
             });
             
             MusicControl.on(Command.previousTrack, () => {
-                console.log('[MusicControl] Previous');
-                playPrevious();
+                console.log('[MusicControl] Previous track command received');
+                usePlayerStore.getState().playPrevious();
             });
             
             MusicControl.on(Command.seek, (pos: number) => {
-                console.log('[MusicControl] Seek to:', pos);
+                console.log('[MusicControl] Seek command received, position:', pos);
                 if (videoRef.current) {
                     videoRef.current.seek(pos);
-                    updateProgress(pos, duration);
+                    const store = usePlayerStore.getState();
+                    store.updateProgress(pos, store.duration);
                 }
             });
 
             MusicControl.on(Command.closeNotification, () => {
-                console.log('[MusicControl] Close notification');
-                setIsPlaying(false);
+                console.log('[MusicControl] Close notification command received');
+                usePlayerStore.getState().setIsPlaying(false);
+            });
+
+            // Handle togglePlayPause - Android often sends this instead of separate play/pause
+            MusicControl.on(Command.togglePlayPause, () => {
+                console.log('[MusicControl] Toggle play/pause command received');
+                const store = usePlayerStore.getState();
+                store.setIsPlaying(!store.isPlaying);
             });
             
             isInitializedRef.current = true;
-            console.log('[MusicControl] Initialized');
+            console.log('[MusicControl] Initialized successfully');
         } catch (error) {
             console.error('[MusicControl] Init error:', error);
         }
@@ -112,6 +118,7 @@ export const AudioPlayer = () => {
         if (!currentSong || !isInitializedRef.current) return;
         
         try {
+            console.log('[MusicControl] Updating now playing:', currentSong.title);
             MusicControl.setNowPlaying({
                 title: currentSong.title || 'Unknown Title',
                 artist: currentSong.artist || 'Unknown Artist',
@@ -126,7 +133,6 @@ export const AudioPlayer = () => {
                     ? getFullImageUrl(currentSong.imageUrl) 
                     : undefined,
             });
-            console.log('[MusicControl] Now playing:', currentSong.title);
         } catch (error) {
             console.error('[MusicControl] Set now playing error:', error);
         }
@@ -134,6 +140,12 @@ export const AudioPlayer = () => {
 
     // Update playback state in notification
     useEffect(() => {
+        console.log('[AudioPlayer] isPlaying effect triggered:', {
+            isPlaying,
+            hasVideoRef: !!videoRef.current,
+            audioUrl: audioUrl?.substring(0, 60),
+        });
+        
         if (!isInitializedRef.current) return;
         
         try {
@@ -144,7 +156,7 @@ export const AudioPlayer = () => {
         } catch (error) {
             console.error('[MusicControl] Update playback error:', error);
         }
-    }, [isPlaying, Math.floor(currentTime / 5)]); // Update every 5 seconds
+    }, [isPlaying]); // Only trigger on isPlaying changes
 
     // Handle seek requests from store
     useEffect(() => {
@@ -160,6 +172,19 @@ export const AudioPlayer = () => {
         return () => unsubscribe();
     }, []);
 
+    // Periodically update notification progress
+    useEffect(() => {
+        if (!isInitializedRef.current || !isPlaying) return;
+        
+        try {
+            MusicControl.updatePlayback({
+                elapsedTime: Number(currentTime) || 0,
+            });
+        } catch (error) {
+            // Ignore
+        }
+    }, [Math.floor(currentTime / 5)]);
+
     const handleProgress = useCallback((data: OnProgressData) => {
         // Don't update if we're actively seeking
         if (seekTimeRef.current !== null) {
@@ -173,7 +198,7 @@ export const AudioPlayer = () => {
     }, [updateProgress]);
 
     const handleLoad = useCallback((data: OnLoadData) => {
-        console.log('Audio loaded, duration:', data.duration);
+        console.log('[AudioPlayer] Audio loaded, duration:', data.duration);
         updateProgress(0, data.duration);
         
         // Update duration in notification
@@ -194,19 +219,19 @@ export const AudioPlayer = () => {
     }, [updateProgress, currentSong]);
 
     const handleEnd = useCallback(() => {
-        console.log('Playback ended');
+        console.log('[AudioPlayer] Playback ended');
         onPlaybackEnd();
     }, [onPlaybackEnd]);
 
     const handleError = useCallback((error: any) => {
-        console.error('Audio playback error:', error);
-        console.error('Audio playback error - audioUrl was:', audioUrl);
-        setIsPlaying(false);
-    }, [setIsPlaying, audioUrl]);
+        console.error('[AudioPlayer] Playback error:', error);
+        console.error('[AudioPlayer] Audio URL was:', audioUrl);
+        usePlayerStore.getState().setIsPlaying(false);
+    }, [audioUrl]);
 
     const handleBuffer = useCallback((data: { isBuffering: boolean }) => {
         if (data.isBuffering) {
-            console.log('Buffering...');
+            console.log('[AudioPlayer] Buffering...');
             if (isInitializedRef.current) {
                 try {
                     MusicControl.updatePlayback({
@@ -221,7 +246,13 @@ export const AudioPlayer = () => {
 
     const handleReadyForDisplay = useCallback(() => {
         // Audio is ready
+        console.log('[AudioPlayer] Ready for display');
     }, []);
+
+    // Debug: Log when audioUrl changes
+    useEffect(() => {
+        console.log('[AudioPlayer] audioUrl changed to:', audioUrl);
+    }, [audioUrl]);
 
     // No audio URL, don't render anything
     if (!audioUrl) {
@@ -246,6 +277,7 @@ export const AudioPlayer = () => {
             playWhenInactive={true}
             ignoreSilentSwitch="ignore"
             resizeMode="none"
+            automaticallyWaitsToMinimizeStalling={false}
         />
     );
 };

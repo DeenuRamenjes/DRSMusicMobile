@@ -11,7 +11,7 @@
 
 // Set to true for production (deployed backend)
 // Set to false for local development
-export const USE_PRODUCTION = false;
+export const USE_PRODUCTION = true;
 
 // Production/Deployed Backend URL
 const PRODUCTION_URL = 'https://drs-music-backend.onrender.com';

@@ -14,6 +14,8 @@ declare module 'react-native-music-control' {
         volume = 'volume',
         remoteVolume = 'remoteVolume',
         closeNotification = 'closeNotification',
+        togglePlayPause = 'togglePlayPause',
+        changePlaybackPosition = 'changePlaybackPosition',
     }
 
     interface NowPlayingInfo {

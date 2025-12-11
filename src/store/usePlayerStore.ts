@@ -517,7 +517,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     setIsPlaying: (isPlaying: boolean) => {
-        set({ isPlaying });
+        const { currentSong, audioUrl } = get();
+
+        // If trying to play but no audio URL loaded, load it
+        if (isPlaying && !audioUrl && currentSong?.audioUrl) {
+            set({
+                isPlaying: true,
+                audioUrl: getFullAudioUrl(currentSong.audioUrl)
+            });
+        } else {
+            set({ isPlaying });
+        }
     },
 
     setAudioQuality: (quality: 'low' | 'normal' | 'high') => {
