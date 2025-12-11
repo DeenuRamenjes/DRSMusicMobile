@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
 
@@ -32,6 +33,7 @@ const FeaturedSection = () => {
   const navigation = useNavigation();
   const { featuredSongs, isLoading, error } = useMusicStore();
   const { currentSong, isPlaying, playSong, pauseSong, playAlbum } = usePlayerStore();
+  const { colors: themeColors } = useThemeStore();
 
   const playFromFeatured = (song: Song, index: number) => {
     if (currentSong?._id === song._id) {
@@ -126,12 +128,15 @@ const FeaturedSection = () => {
               <Text style={styles.featuredArtist} numberOfLines={1}>{song.artist}</Text>
             </View>
             <TouchableOpacity
-              style={styles.featuredPlayButton}
+              style={[styles.featuredPlayButton, { backgroundColor: themeColors.primary }]}
               onPress={() => handlePlayPress(song, index)}
             >
-              <Text style={styles.featuredPlayIcon}>
-                {currentSong?._id === song._id && isPlaying ? '⏸' : '▶'}
-              </Text>
+              <Icon 
+                name={currentSong?._id === song._id && isPlaying ? 'pause' : 'play'} 
+                size={20} 
+                color="#fff"
+                style={!(currentSong?._id === song._id && isPlaying) && { marginLeft: 2 }}
+              />
             </TouchableOpacity>
           </TouchableOpacity>
         ))}
@@ -151,6 +156,7 @@ interface SectionGridProps {
 const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps) => {
   const navigation = useNavigation();
   const { currentSong, isPlaying, playSong, pauseSong, playAlbum } = usePlayerStore();
+  const { colors: themeColors } = useThemeStore();
   
   const maxVisibleCards = 4; // 2x2 grid on mobile
   const visibleSongs = songs.slice(0, maxVisibleCards);
@@ -243,12 +249,15 @@ const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps)
               )}
               {/* Play Button */}
               <TouchableOpacity
-                style={styles.gridPlayButton}
+                style={[styles.gridPlayButton, { backgroundColor: themeColors.primary }]}
                 onPress={() => handlePlayPress(song, index)}
               >
-                <Text style={styles.gridPlayIcon}>
-                  {currentSong?._id === song._id && isPlaying ? '⏸' : '▶'}
-                </Text>
+                <Icon 
+                  name={currentSong?._id === song._id && isPlaying ? 'pause' : 'play'} 
+                  size={16} 
+                  color="#fff"
+                  style={!(currentSong?._id === song._id && isPlaying) && { marginLeft: 2 }}
+                />
               </TouchableOpacity>
               {/* Active indicator */}
               {currentSong?._id === song._id && (
@@ -282,6 +291,7 @@ const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps)
 const OfflineModeView = () => {
   const { downloadedSongs, deviceSongs, isScanning, scanDeviceMusic, loadDownloadedSongs } = useOfflineMusicStore();
   const { playSong, setQueue, currentSong, isPlaying } = usePlayerStore();
+  const { colors: themeColors } = useThemeStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const allOfflineSongs = [...downloadedSongs, ...deviceSongs];
@@ -291,11 +301,17 @@ const OfflineModeView = () => {
   }, []);
 
   const handlePlaySong = (song: any, index: number) => {
-    setQueue(allOfflineSongs as any);
-    playSong({
-      ...song,
-      audioUrl: song.localPath ? `file://${song.localPath}` : song.audioUrl,
-    });
+    // Prepare all songs with proper file:// URLs
+    const queueSongs = allOfflineSongs.map(s => ({
+      ...s,
+      audioUrl: s.localPath 
+        ? (s.localPath.startsWith('file://') ? s.localPath : `file://${s.localPath}`)
+        : s.audioUrl,
+    }));
+    
+    // Use playAlbum to set queue and play atomically
+    const { playAlbum } = usePlayerStore.getState();
+    playAlbum(queueSongs as any, index);
   };
 
   const renderGridItem = (song: any, index: number) => {
@@ -342,13 +358,13 @@ const OfflineModeView = () => {
           )}
         </View>
         <View style={styles.offlineListInfo}>
-          <Text style={[styles.offlineListTitle, isCurrentSong && { color: COLORS.primary }]} numberOfLines={1}>
+          <Text style={[styles.offlineListTitle, isCurrentSong && { color: themeColors.primary }]} numberOfLines={1}>
             {song.title}
           </Text>
           <Text style={styles.offlineListArtist} numberOfLines={1}>{song.artist}</Text>
         </View>
         <TouchableOpacity style={styles.offlineListPlay} onPress={() => handlePlaySong(song, index)}>
-          <Icon name={isCurrentSong && isPlaying ? "pause" : "play"} size={20} color={COLORS.primary} />
+          <Icon name={isCurrentSong && isPlaying ? "pause" : "play"} size={20} color={themeColors.primary} />
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -366,13 +382,13 @@ const OfflineModeView = () => {
               style={[styles.viewModeBtn, viewMode === 'grid' && styles.viewModeBtnActive]}
               onPress={() => setViewMode('grid')}
             >
-              <Icon name="grid" size={18} color={viewMode === 'grid' ? COLORS.primary : COLORS.textMuted} />
+              <Icon name="grid" size={18} color={viewMode === 'grid' ? themeColors.primary : COLORS.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.viewModeBtn, viewMode === 'list' && styles.viewModeBtnActive]}
               onPress={() => setViewMode('list')}
             >
-              <Icon name="list" size={18} color={viewMode === 'list' ? COLORS.primary : COLORS.textMuted} />
+              <Icon name="list" size={18} color={viewMode === 'list' ? themeColors.primary : COLORS.textMuted} />
             </TouchableOpacity>
           </View>
         </View>
@@ -385,9 +401,9 @@ const OfflineModeView = () => {
         disabled={isScanning}
       >
         {isScanning ? (
-          <ActivityIndicator size="small" color={COLORS.primary} />
+          <ActivityIndicator size="small" color={themeColors.primary} />
         ) : (
-          <Icon name="search" size={18} color={COLORS.primary} />
+          <Icon name="search" size={18} color={themeColors.primary} />
         )}
         <Text style={styles.scanButtonText}>
           {isScanning ? 'Scanning...' : 'Scan for Music'}
@@ -446,8 +462,9 @@ export const HomeScreen = () => {
     error,
   } = useMusicStore();
 
-  const { currentSong, setQueue, queue } = usePlayerStore();
+  const { currentSong, setQueue, queue, isPlaying, playSong } = usePlayerStore();
   const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
+  const { colors: themeColors } = useThemeStore();
 
   const handleProfilePress = () => {
     // Navigate to Profile tab - for now just log
@@ -506,13 +523,45 @@ export const HomeScreen = () => {
     setRefreshing(false);
   };
 
+  // Search filtering logic
+  const allSongsForSearch = useMemo(() => {
+    return [...new Map([
+      ...madeForYouSongs,
+      ...featuredSongs,
+      ...trendingSongs,
+      ...likedSongs,
+    ].map(song => [song._id, song])).values()];
+  }, [madeForYouSongs, featuredSongs, trendingSongs, likedSongs]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase().trim();
+    return allSongsForSearch.filter(song => 
+      song.title?.toLowerCase().includes(query) ||
+      song.artist?.toLowerCase().includes(query)
+    ).slice(0, 20);
+  }, [searchQuery, allSongsForSearch]);
+
+  const handleSearchResultPlay = (song: Song, index: number) => {
+    if (currentSong?._id === song._id) {
+      if (!isPlaying) {
+        playSong(song);
+      }
+      return;
+    }
+    // Set search results as queue and play
+    const { playAlbum } = usePlayerStore.getState();
+    playAlbum(searchResults, index);
+    (navigation as any).navigate('SongDetail', { songId: song._id });
+  };
+
   // Don't show error in offline mode
   if (error && !isOfflineMode) {
     return (
-      <View style={styles.errorContainer}>
+      <View style={[styles.errorContainer, { backgroundColor: COLORS.background }]}>
         <Text style={styles.errorTitle}>Error loading songs</Text>
         <Text style={styles.errorMessage}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+        <TouchableOpacity style={[styles.retryButton, { backgroundColor: themeColors.primary }]} onPress={onRefresh}>
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -522,7 +571,7 @@ export const HomeScreen = () => {
   if (isLoading && !refreshing && !isOfflineMode) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={themeColors.primary} />
       </View>
     );
   }
@@ -595,18 +644,74 @@ export const HomeScreen = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={COLORS.primary}
-            colors={[COLORS.primary]}
+            tintColor={themeColors.primary}
+            colors={[themeColors.primary]}
           />
         }
       >
-        {/* Liked Songs Section */}
-        <SectionGrid
-          title="Liked Songs"
-          songs={likedSongs}
-          isLoading={likedSongsLoading || !likedSongsInitialized}
-          viewAllPath="/likes"
-        />
+        {/* Search Results - Show when searching */}
+        {searchQuery.trim().length > 0 ? (
+          <View style={styles.searchResultsContainer}>
+            <Text style={styles.searchResultsTitle}>
+              Search Results {searchResults.length > 0 ? `(${searchResults.length})` : ''}
+            </Text>
+            {searchResults.length === 0 ? (
+              <View style={styles.noResultsContainer}>
+                <Icon name="search" size={48} color={COLORS.textMuted} />
+                <Text style={styles.noResultsText}>No songs found for "{searchQuery}"</Text>
+                <Text style={styles.noResultsSubtext}>Try searching for something else</Text>
+              </View>
+            ) : (
+              searchResults.map((song, index) => {
+                const isCurrentSong = currentSong?._id === song._id;
+                const isThisSongPlaying = isCurrentSong && isPlaying;
+                return (
+                  <TouchableOpacity
+                    key={song._id}
+                    style={[styles.searchResultItem, isCurrentSong && styles.searchResultItemActive]}
+                    onPress={() => handleSearchResultPlay(song, index)}
+                    activeOpacity={0.7}
+                  >
+                    <Image
+                      source={{ uri: getFullImageUrl(song.imageUrl) }}
+                      style={styles.searchResultImage}
+                    />
+                    <View style={styles.searchResultInfo}>
+                      <Text 
+                        style={[styles.searchResultTitle, isCurrentSong && { color: themeColors.primary }]} 
+                        numberOfLines={1}
+                      >
+                        {song.title}
+                      </Text>
+                      <Text style={styles.searchResultArtist} numberOfLines={1}>
+                        {song.artist}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.searchResultPlayBtn, { backgroundColor: themeColors.primary }]}
+                      onPress={() => handleSearchResultPlay(song, index)}
+                    >
+                      <Icon
+                        name={isThisSongPlaying ? 'pause' : 'play'}
+                        size={16}
+                        color="#fff"
+                        style={!isThisSongPlaying && { marginLeft: 2 }}
+                      />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
+        ) : (
+          <>
+            {/* Liked Songs Section */}
+            <SectionGrid
+              title="Liked Songs"
+              songs={likedSongs}
+              isLoading={likedSongsLoading || !likedSongsInitialized}
+              viewAllPath="/likes"
+            />
 
       {/* Featured Section */}
       <FeaturedSection />
@@ -627,6 +732,8 @@ export const HomeScreen = () => {
 
       {/* Bottom spacing for playback controls */}
       <View style={{ height: DIMS.playbackHeight + SPACING.xl }} />
+          </>
+        )}
     </ScrollView>
     </View>
   );
@@ -697,6 +804,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.lg,
+    marginTop: SPACING.md
   },
   searchIcon: {
     marginRight: SPACING.sm,
@@ -705,7 +813,71 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FONT_SIZES.md,
     color: COLORS.textPrimary,
-    padding: 0,
+    padding: 4,
+  },
+  // Search Results styles
+  searchResultsContainer: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+  },
+  searchResultsTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.md,
+  },
+  noResultsContainer: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  noResultsText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textPrimary,
+    marginTop: SPACING.md,
+  },
+  noResultsSubtext: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: SPACING.xs,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.xs,
+  },
+  searchResultItemActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  searchResultImage: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.zinc800,
+  },
+  searchResultInfo: {
+    flex: 1,
+    marginLeft: SPACING.md,
+    marginRight: SPACING.md,
+  },
+  searchResultTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  searchResultArtist: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  searchResultPlayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   container: {
     flex: 1,

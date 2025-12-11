@@ -1,24 +1,33 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
+  ImageBackground,
   ScrollView,
   Dimensions,
   StatusBar,
   GestureResponderEvent,
   LayoutRectangle,
+  Modal,
+  FlatList,
+  Share,
+  Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import Slider from '@react-native-community/slider';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '../constants/theme';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useMusicStore } from '../store/useMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
-import { getFullImageUrl } from '../config';
+import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
+import { getFullImageUrl, getFullAudioUrl } from '../config';
+import { Song } from '../types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -27,6 +36,10 @@ const ALBUM_ART_SIZE = Math.min(SCREEN_WIDTH - SPACING.xxl * 2, 320);
 
 export const SongDetailScreen = () => {
   const navigation = useNavigation();
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   
   const {
     currentSong,
@@ -41,15 +54,43 @@ export const SongDetailScreen = () => {
     toggleShuffle,
     toggleLoop,
     seekTo,
+    queue,
+    shuffleQueue,
+    currentIndex,
+    playSong,
+    volume,
+    isMuted,
+    setVolume,
+    toggleMute,
   } = usePlayerStore();
 
   const { likedSongs, likeSong, unlikeSong } = useMusicStore();
   const { colors: themeColors } = useThemeStore();
+  const { isDownloaded, downloadSong, deleteSong, downloadProgress } = useOfflineMusicStore();
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   const isSongLiked = currentSong ? likedSongs.some(s => s._id === currentSong._id) : false;
 
+  // Calculate upcoming queue based on shuffle/loop mode (matching web app logic exactly)
+  const upcomingQueue = useMemo(() => {
+    if (!queue.length) return [];
 
+    if (isShuffle) {
+      if (shuffleQueue.length) {
+        return shuffleQueue;
+      }
+      if (isLooping) {
+        return queue.filter((queuedSong) => queuedSong._id !== currentSong?._id);
+      }
+      return [];
+    }
+
+    if (currentIndex === -1) return queue;
+
+    const afterCurrent = queue.slice(currentIndex + 1);
+    const beforeCurrent = queue.slice(0, currentIndex);
+    return [...afterCurrent, ...beforeCurrent];
+  }, [queue, currentIndex, isShuffle, isLooping, shuffleQueue, currentSong?._id]);
 
   // Ref for progress bar to measure its layout
   const progressBarRef = useRef<View>(null);
@@ -68,11 +109,9 @@ export const SongDetailScreen = () => {
     const { locationX } = event.nativeEvent;
     const barWidth = progressBarLayout.current.width;
     
-    // Calculate the seek position as a percentage
     const seekPercent = Math.max(0, Math.min(1, locationX / barWidth));
     const seekPosition = seekPercent * duration;
     
-    console.log(`Seeking to ${formatTime(seekPosition)} (${Math.round(seekPercent * 100)}%)`);
     seekTo(seekPosition);
   };
 
@@ -96,6 +135,99 @@ export const SongDetailScreen = () => {
     }
   };
 
+  const handlePlayFromQueue = (song: Song) => {
+    playSong(song);
+    setIsQueueOpen(false);
+  };
+
+  const handleShare = async () => {
+    if (!currentSong) return;
+    try {
+      await Share.share({
+        message: `🎵 Listen to "${currentSong.title}" by ${currentSong.artist} on DRS Music!`,
+        title: currentSong.title,
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
+    setIsMenuOpen(false);
+  };
+
+  const handleViewLyrics = () => {
+    setIsMenuOpen(false);
+    if (currentSong) {
+      (navigation as any).navigate('Lyrics', { songId: currentSong._id });
+    }
+  };
+
+  const handleDownload = () => {
+    if (!currentSong) return;
+    setIsMenuOpen(false);
+
+    // Check if already downloaded
+    if (isDownloaded(currentSong._id)) {
+      Alert.alert(
+        'Already Downloaded',
+        `"${currentSong.title}" is already available offline.`,
+        [
+          { text: 'OK', style: 'default' },
+          { 
+            text: 'Remove Download', 
+            style: 'destructive',
+            onPress: async () => {
+              const success = await deleteSong(currentSong._id);
+              if (success) {
+                Alert.alert('Removed', 'Song removed from downloads.');
+              }
+            }
+          },
+        ]
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    Alert.alert(
+      'Download Song',
+      `Download "${currentSong.title}" by ${currentSong.artist} for offline listening?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Download',
+          style: 'default',
+          onPress: async () => {
+            setIsDownloading(true);
+            try {
+              const audioUrl = getFullAudioUrl(currentSong.audioUrl);
+              const success = await downloadSong(currentSong, audioUrl);
+              
+              if (success) {
+                Alert.alert(
+                  'Download Complete',
+                  `"${currentSong.title}" is now available offline!`
+                );
+              } else {
+                Alert.alert(
+                  'Download Failed',
+                  'Could not download the song. Please try again.'
+                );
+              }
+            } catch (error) {
+              console.error('Download error:', error);
+              Alert.alert('Download Failed', 'Could not download the song. Please try again.');
+            } finally {
+              setIsDownloading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleVolumeChange = (value: number) => {
+    setVolume(value);
+  };
+
   if (!currentSong) {
     return (
       <SafeAreaView style={styles.container}>
@@ -112,20 +244,59 @@ export const SongDetailScreen = () => {
 
   const imageUri = getFullImageUrl(currentSong.imageUrl);
 
+  const renderQueueItem = ({ item, index }: { item: Song; index: number }) => {
+    return (
+      <TouchableOpacity
+        style={styles.queueItem}
+        onPress={() => handlePlayFromQueue(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.queueItemIndex}>
+          <Text style={styles.queueItemIndexText}>{index + 1}</Text>
+        </View>
+        <Image
+          source={{ uri: getFullImageUrl(item.imageUrl) }}
+          style={styles.queueItemImage}
+        />
+        <View style={styles.queueItemInfo}>
+          <Text style={styles.queueItemTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.queueItemArtist} numberOfLines={1}>{item.artist}</Text>
+        </View>
+        <Text style={styles.queueItemDuration}>{formatTime(item.duration || 0)}</Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+    <View style={styles.container}>
+      {/* Blurred Background Image */}
+      {imageUri && (
+        <ImageBackground
+          source={{ uri: imageUri }}
+          style={styles.backgroundImage}
+          blurRadius={Platform.OS === 'ios' ? 50 : 25}
+          resizeMode="cover"
+        >
+          <View style={styles.backgroundOverlay} />
+        </ImageBackground>
+      )}
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Icon name="chevron-down" size={28} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>NOW PLAYING</Text>
-        <TouchableOpacity style={styles.menuButton}>
-          <Icon name="more-vertical" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Icon name="chevron-down" size={28} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>NOW PLAYING</Text>
+          <TouchableOpacity 
+            style={styles.menuButton}
+            onPress={() => setIsMenuOpen(true)}
+          >
+            <Icon name="more-vertical" size={24} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+        </View>
 
       <ScrollView
         style={styles.content}
@@ -221,25 +392,225 @@ export const SongDetailScreen = () => {
               name="heart" 
               size={24} 
               color={isSongLiked ? '#f43f5e' : COLORS.textMuted}
-              style={isSongLiked && { backgroundColor: 'transparent' }}
             />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
-            <Icon name="volume-2" size={24} color={COLORS.textMuted} />
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setIsVolumeOpen(true)}
+          >
+            <Icon 
+              name={isMuted || volume === 0 ? "volume-x" : "volume-2"} 
+              size={24} 
+              color={COLORS.textMuted} 
+            />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setIsQueueOpen(true)}
+          >
             <Icon name="list" size={24} color={COLORS.textMuted} />
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Volume Modal */}
+      <Modal
+        visible={isVolumeOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setIsVolumeOpen(false)}
+      >
+        <TouchableOpacity 
+          style={styles.volumeModalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsVolumeOpen(false)}
+        >
+          <View style={styles.volumePanel}>
+            <View style={styles.volumeHeader}>
+              <Icon name="volume-2" size={20} color={COLORS.textPrimary} />
+              <Text style={styles.volumeTitle}>Volume</Text>
+            </View>
+            
+            <View style={styles.volumeSliderContainer}>
+              <Icon name="volume" size={18} color={COLORS.textMuted} />
+              <Slider
+                style={styles.volumeSlider}
+                minimumValue={0}
+                maximumValue={1}
+                value={isMuted ? 0 : volume}
+                onValueChange={handleVolumeChange}
+                minimumTrackTintColor={themeColors.primary}
+                maximumTrackTintColor="rgba(255,255,255,0.2)"
+                thumbTintColor={COLORS.textPrimary}
+              />
+              <Icon name="volume-2" size={18} color={COLORS.textMuted} />
+            </View>
+            
+            <View style={styles.volumeFooter}>
+              <Text style={styles.volumePercent}>
+                {Math.round((isMuted ? 0 : volume) * 100)}%
+              </Text>
+              <TouchableOpacity 
+                style={styles.muteButton}
+                onPress={toggleMute}
+              >
+                <Icon 
+                  name={isMuted ? "volume-x" : "volume-2"} 
+                  size={20} 
+                  color={isMuted ? themeColors.primary : COLORS.textMuted} 
+                />
+                <Text style={[styles.muteText, isMuted && { color: themeColors.primary }]}>
+                  {isMuted ? 'Unmute' : 'Mute'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Menu Modal */}
+      <Modal
+        visible={isMenuOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setIsMenuOpen(false)}
+      >
+        <View style={styles.menuModalOverlay}>
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setIsMenuOpen(false)}
+          />
+          <View style={styles.menuPanel}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={handleShare}
+            >
+              <Icon name="share" size={20} color={COLORS.textPrimary} />
+              <Text style={styles.menuItemText}>Share song</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={handleViewLyrics}
+            >
+              <Icon name="file-text" size={20} color={COLORS.textPrimary} />
+              <Text style={styles.menuItemText}>View Lyrics</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={handleDownload}
+              disabled={isDownloading}
+            >
+              <Icon 
+                name={currentSong && isDownloaded(currentSong._id) ? "check-circle" : "download"} 
+                size={20} 
+                color={currentSong && isDownloaded(currentSong._id) ? themeColors.primary : COLORS.textPrimary} 
+              />
+              <Text style={[
+                styles.menuItemText,
+                currentSong && isDownloaded(currentSong._id) && { color: themeColors.primary }
+              ]}>
+                {isDownloading 
+                  ? `Downloading... ${downloadProgress[currentSong?._id || '']?.progress || 0}%`
+                  : currentSong && isDownloaded(currentSong._id)
+                    ? 'Downloaded'
+                    : 'Download'}
+              </Text>
+            </TouchableOpacity>
+            
+            <View style={styles.menuDivider} />
+            
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => setIsMenuOpen(false)}
+            >
+              <Icon name="x" size={20} color={COLORS.textMuted} />
+              <Text style={[styles.menuItemText, { color: COLORS.textMuted }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Queue Modal */}
+      <Modal
+        visible={isQueueOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsQueueOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsQueueOpen(false)}
+          />
+          <View style={styles.queuePanel}>
+            {/* Queue Header */}
+            <View style={styles.queueHeader}>
+              <View style={styles.queueTitleContainer}>
+                <Icon name="list" size={20} color={COLORS.textPrimary} />
+                <Text style={styles.queueTitle}>
+                  {isShuffle ? 'Next Songs (Shuffled)' : 'Next Songs'}
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.queueCloseButton}
+                onPress={() => setIsQueueOpen(false)}
+              >
+                <Text style={styles.queueCloseText}>Close</Text>
+                <Icon name="chevron-down" size={16} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Queue List */}
+            {upcomingQueue.length > 0 ? (
+              <FlatList
+                data={upcomingQueue}
+                renderItem={renderQueueItem}
+                keyExtractor={(item) => item._id}
+                style={styles.queueList}
+                contentContainerStyle={styles.queueListContent}
+                showsVerticalScrollIndicator={false}
+              />
+            ) : (
+              <View style={styles.emptyQueue}>
+                <Icon name="music" size={40} color={COLORS.textMuted} />
+                <Text style={styles.emptyQueueText}>Queue is empty</Text>
+                <Text style={styles.emptyQueueSubtext}>
+                  {queue.length === 0 
+                    ? 'Play a song to start the queue'
+                    : isShuffle && !isLooping 
+                      ? 'Enable loop to continue playing' 
+                      : 'No more songs to play'}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    // backgroundColor: COLORS.background,
+  },
+  backgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  safeArea: {
+    flex: 1,
   },
   emptyContainer: {
     flex: 1,
@@ -320,7 +691,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    height:80,
+    height: 80,
     textAlign: 'center',
     marginBottom: SPACING.sm,
   },
@@ -409,6 +780,221 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     padding: SPACING.md,
+  },
+  // Volume Modal Styles
+  volumeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 120,
+  },
+  volumePanel: {
+    backgroundColor: 'rgba(39, 39, 42, 0.98)',
+    borderRadius: 20,
+    padding: SPACING.lg,
+    width: SCREEN_WIDTH - SPACING.xxl * 2,
+    maxWidth: 280,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 25,
+  },
+  volumeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  volumeTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  volumeSliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  volumeSlider: {
+    flex: 1,
+    height: 40,
+  },
+  volumeFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.md,
+  },
+  volumePercent: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  muteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.sm,
+  },
+  muteText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+  },
+  // Menu Modal Styles
+  menuModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  menuPanel: {
+    position: 'absolute',
+    top: 60,
+    right: SPACING.lg,
+    backgroundColor: 'rgba(39, 39, 42, 0.98)',
+    borderRadius: 16,
+    padding: SPACING.sm,
+    minWidth: 200,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 25,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  menuItemText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textPrimary,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginVertical: SPACING.sm,
+  },
+  // Queue Modal Styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  queuePanel: {
+    backgroundColor: 'rgba(24, 24, 27, 0.98)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xxl,
+    maxHeight: '70%',
+    minHeight: 300,
+  },
+  queueHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  queueTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  queueTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  queueCloseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    padding: SPACING.sm,
+  },
+  queueCloseText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+  },
+  queueList: {
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  queueListContent: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
+  },
+  queueItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.sm,
+    marginVertical: 2,
+    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  queueItemIndex: {
+    width: 24,
+    alignItems: 'center',
+  },
+  queueItemIndexText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+  },
+  queueItemImage: {
+    width: 40,
+    height: 40,
+    borderRadius: BORDER_RADIUS.md,
+    marginRight: SPACING.sm,
+  },
+  queueItemInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  queueItemTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  queueItemArtist: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  queueItemDuration: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    marginLeft: SPACING.sm,
+  },
+  emptyQueue: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xxl,
+    gap: SPACING.md,
+  },
+  emptyQueueText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textMuted,
+  },
+  emptyQueueSubtext: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    opacity: 0.7,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.xl,
   },
 });
 

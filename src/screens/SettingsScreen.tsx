@@ -20,9 +20,9 @@ import { useThemeStore } from '../store/useThemeStore';
 import axiosInstance from '../api/axios';
 
 // Toggle Component - iOS Style
-const Toggle = ({ enabled, onChange }: { enabled: boolean; onChange: () => void }) => (
+const Toggle = ({ enabled, onChange, themeColor }: { enabled: boolean; onChange: () => void; themeColor?: string }) => (
   <Switch
-    trackColor={{ false: COLORS.zinc600, true: COLORS.primary }}
+    trackColor={{ false: COLORS.zinc600, true: themeColor || COLORS.primary }}
     thumbColor={COLORS.textPrimary}
     ios_backgroundColor={COLORS.zinc600}
     onValueChange={onChange}
@@ -375,7 +375,7 @@ export const SettingsScreen = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={themeColors.primary} />
       </View>
     );
   }
@@ -394,7 +394,7 @@ export const SettingsScreen = () => {
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={styles.headerRight}>
           {isSaving && (
-            <ActivityIndicator size="small" color={COLORS.primary} />
+            <ActivityIndicator size="small" color={themeColors.primary} />
           )}
         </View>
       </View>

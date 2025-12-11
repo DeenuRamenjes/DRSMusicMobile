@@ -7,6 +7,7 @@ import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LogBox } from 'react-native';
 import { AppNavigator } from './src/navigation/AppNavigator';
+import { AudioPlayer } from './src/components/AudioPlayer';
 
 // Ignore specific warnings
 LogBox.ignoreLogs([
@@ -18,6 +19,8 @@ function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <AppNavigator />
+      {/* Hidden audio player component */}
+      <AudioPlayer />
     </SafeAreaProvider>
   );
 }

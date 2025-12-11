@@ -118,30 +118,28 @@ export const OfflineMusicScreen = () => {
   };
 
   const handlePlaySong = (song: LocalSong) => {
-    // Construct the proper file URL for local playback
-    let audioUrl = song.localPath;
-    
-    // Only add file:// prefix if not already present
-    if (!audioUrl.startsWith('file://')) {
-      audioUrl = `file://${audioUrl}`;
-    }
-    
-    // Create the song object with local audio URL
-    const localSong = {
-      ...song,
-      audioUrl,
-    };
-    
-    // Set the queue with all songs from the current tab (for next/previous navigation)
+    // Get all songs from the current tab for the queue
     const currentSongs = activeTab === 'downloaded' ? downloadedSongs : deviceSongs;
+    
+    // Prepare all songs with proper file:// URLs
     const queueSongs = currentSongs.map(s => ({
       ...s,
       audioUrl: s.localPath.startsWith('file://') ? s.localPath : `file://${s.localPath}`,
     }));
-    setQueue(queueSongs);
     
-    setCurrentSong(localSong);
-    playSong(localSong);
+    // Find the index of the song to play
+    const songIndex = queueSongs.findIndex(s => s._id === song._id);
+    
+    if (songIndex === -1) {
+      console.error('Song not found in list:', song.title);
+      return;
+    }
+    
+    console.log('OfflineMusicScreen: Playing song', song.title, 'at index', songIndex);
+    
+    // Use playAlbum to set queue and play atomically
+    const { playAlbum } = usePlayerStore.getState();
+    playAlbum(queueSongs as any, songIndex);
   };
 
   const handleDeleteSong = (song: LocalSong) => {

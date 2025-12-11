@@ -139,6 +139,21 @@ const LeftSidebar = ({
           </View>
         </TouchableOpacity>
 
+        {/* Offline Music button - Navigate to OfflineMusic screen */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {
+            onNavigate?.();
+            stackNavigation?.navigate('OfflineMusic');
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.navItemContent}>
+            <Icon name="download-cloud" size={20} color={COLORS.textMuted} />
+            <Text style={styles.navLabel}>Offline Music</Text>
+          </View>
+        </TouchableOpacity>
+
 
       </View>
 

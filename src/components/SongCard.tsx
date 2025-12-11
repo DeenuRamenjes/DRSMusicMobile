@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
+import { useThemeStore } from '../store/useThemeStore';
 import { Song } from '../types';
 
 interface SongCardProps {
@@ -22,6 +24,8 @@ export const SongCard: React.FC<SongCardProps> = ({
   isPlaying = false,
   size = 'medium' 
 }) => {
+  const { colors: themeColors } = useThemeStore();
+  
   const dimensions = {
     small: 100,
     medium: 140,
@@ -45,12 +49,12 @@ export const SongCard: React.FC<SongCardProps> = ({
         {/* Play overlay */}
         <View style={[styles.playOverlay, isPlaying && styles.playOverlayActive]}>
           {isPlaying ? (
-            <View style={styles.playingIndicator}>
-              <Text style={styles.playingText}>🎵</Text>
+            <View style={[styles.playingIndicator, { backgroundColor: themeColors.primary }]}>
+              <Icon name="pause" size={20} color="#fff" />
             </View>
           ) : (
-            <View style={styles.playButton}>
-              <Text style={styles.playButtonText}>▶</Text>
+            <View style={[styles.playButton, { backgroundColor: themeColors.primary }]}>
+              <Icon name="play" size={20} color="#fff" style={{ marginLeft: 2 }} />
             </View>
           )}
         </View>
@@ -90,25 +94,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  playButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 2,
   },
   playingIndicator: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  playingText: {
-    fontSize: 20,
   },
   title: {
     fontSize: FONT_SIZES.md,

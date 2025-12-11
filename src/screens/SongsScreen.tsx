@@ -11,10 +11,12 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '../constants/theme';
 import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
 
@@ -32,6 +34,7 @@ export const SongsScreen = () => {
   const { songs, isLoading, fetchSongs } = useMusicStore();
   const { currentSong, isPlaying, playSong, pauseSong, setQueue } = usePlayerStore();
   const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
+  const { colors: themeColors } = useThemeStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filteredSongs, setFilteredSongs] = useState<Song[]>([]);
 
@@ -90,13 +93,17 @@ export const SongsScreen = () => {
           <TouchableOpacity
             style={[
               styles.gridPlayButton,
+              { backgroundColor: themeColors.primary },
               isCurrentSong && isPlaying && styles.gridPlayButtonActive,
             ]}
             onPress={() => handlePlayPause(song)}
           >
-            <Text style={styles.gridPlayIcon}>
-              {isCurrentSong && isPlaying ? '⏸' : '▶'}
-            </Text>
+            <Icon 
+              name={isCurrentSong && isPlaying ? 'pause' : 'play'} 
+              size={16} 
+              color="#fff"
+              style={!(isCurrentSong && isPlaying) && { marginLeft: 2 }}
+            />
           </TouchableOpacity>
           {/* Active indicator */}
           {isCurrentSong && (
@@ -185,7 +192,7 @@ export const SongsScreen = () => {
           <Text style={styles.headerTitle}>All Songs</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={themeColors.primary} />
         </View>
       </View>
     );

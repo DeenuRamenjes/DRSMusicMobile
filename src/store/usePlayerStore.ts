@@ -73,6 +73,7 @@ interface PlayerState {
     shuffleQueue: Song[];
     audioQuality: 'low' | 'normal' | 'high';
     crossfade: boolean;
+    audioUrl: string | null;
 
     // Actions
     playSong: (song: Song) => void;
@@ -98,6 +99,7 @@ interface PlayerState {
     setAudioQuality: (quality: 'low' | 'normal' | 'high') => void;
     toggleCrossfade: () => void;
     loadSettingsFromBackend: () => Promise<void>;
+    onPlaybackEnd: () => void;
     cleanup: () => void;
 }
 
@@ -116,63 +118,77 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     shuffleQueue: [],
     audioQuality: 'high',
     crossfade: false,
+    audioUrl: null,
 
     playSong: (song: Song) => {
         const state = get();
 
         if (!song.audioUrl) {
-            console.warn('Song has no audioUrl:', song.title);
+            console.warn('playSong: Song has no audioUrl:', song.title);
             return;
         }
 
-        // If same song and already playing, toggle instead
+        // If same song, toggle play/pause
         if (state.currentSong?._id === song._id) {
-            if (state.isPlaying) {
-                get().pauseSong();
-            } else {
-                get().resumeSong();
-            }
+            set({ isPlaying: !state.isPlaying });
             return;
         }
 
+        // Get the audio URL - might be local or remote
         const audioUrl = getFullAudioUrl(song.audioUrl);
-        console.log('Would play audio from:', audioUrl);
+        const isLocalFile = audioUrl.startsWith('file://');
 
-        // Find index in queue
-        const index = state.queue.findIndex(s => s._id === song._id);
+        console.log('playSong: Processing', song.title);
+        console.log('playSong: Audio URL:', audioUrl);
+        console.log('playSong: Is local file:', isLocalFile);
 
-        // Update state
+        // Find the song in the queue
+        let songIndex = state.queue.findIndex((s) => s._id === song._id);
+
+        // For local/offline files, if not in queue, add it to queue
+        if (songIndex === -1) {
+            if (isLocalFile) {
+                console.log('playSong: Local file not in queue, adding it');
+                // Add song to queue for local files
+                const newQueue = [...state.queue, song];
+                songIndex = newQueue.length - 1;
+                set({ queue: newQueue });
+            } else {
+                console.error('playSong: Remote song not found in queue:', song.title);
+                console.log('playSong: Current queue length:', state.queue.length);
+                return;
+            }
+        }
+
+        console.log('playSong: Playing from queue index', songIndex, ':', song.title);
+
         const updates: Partial<PlayerState> = {
-            isLoading: false,
-            isPlaying: true,
-            duration: song.duration || 0,
-            currentTime: 0,
-            currentIndex: index,
             currentSong: song,
+            isPlaying: true,
+            currentTime: 0,
+            currentIndex: songIndex,
+            audioUrl: audioUrl,
+            duration: song.duration || 0,
+            isLoading: false,
         };
 
-        // Build shuffle queue if shuffle is on
+        // Handle shuffle queue matching web app behavior
         if (state.isShuffle) {
-            updates.shuffleQueue = buildShuffleQueue(state.queue, song._id);
+            let remainingShuffleQueue = state.shuffleQueue.filter((queuedSong) => queuedSong._id !== song._id);
+            if (remainingShuffleQueue.length === state.shuffleQueue.length) {
+                remainingShuffleQueue = buildShuffleQueue(state.queue, song._id);
+            }
+            updates.shuffleQueue = remainingShuffleQueue;
         }
 
         set(updates);
 
-        // Save as last played song
-        saveLastSong(song);
-
-        // NOTE: Audio playback is temporarily disabled
-        // A compatible audio library will be added in a future update
-        console.log('Now playing (UI only):', song.title, '-', song.artist);
-
-        // Broadcast activity to friends
-        try {
-            const { useFriendsStore } = require('./useFriendsStore');
-            useFriendsStore.getState().updateActivity(song.title, song.artist);
-        } catch (e) {
-            // Friends store may not be available
+        // Save as last played song (only for non-local files to avoid issues)
+        if (!isLocalFile) {
+            saveLastSong(song);
         }
     },
+
 
     setCurrentSong: (song: Song) => {
         if (!song.audioUrl) {
@@ -186,6 +202,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             isLoading: false,
             currentTime: 0,
             duration: song.duration || 0,
+            audioUrl: null,
         });
 
         // Save as last played song for restoration
@@ -201,14 +218,47 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
                 isLoading: false,
                 currentTime: 0,
                 duration: lastSong.duration || 0,
+                audioUrl: null,
             });
         }
     },
 
     playAlbum: (songs: Song[], startIndex = 0) => {
-        set({ queue: songs });
-        if (songs.length > 0 && songs[startIndex]) {
-            get().playSong(songs[startIndex]);
+        if (!songs.length) {
+            return;
+        }
+
+        const state = get();
+        const boundedIndex = Math.min(Math.max(startIndex, 0), songs.length - 1);
+        const songToPlay = songs[boundedIndex];
+
+        if (!songToPlay.audioUrl) {
+            console.warn('playAlbum: Song has no audioUrl:', songToPlay.title);
+            return;
+        }
+
+        const newQueue = [...songs];
+        const audioUrl = getFullAudioUrl(songToPlay.audioUrl);
+
+        console.log('playAlbum: Setting queue with', newQueue.length, 'songs, playing index', boundedIndex, ':', songToPlay.title);
+        console.log('playAlbum: Audio URL:', audioUrl);
+
+        // Set everything atomically like web app
+        set({
+            queue: newQueue,
+            currentSong: songToPlay,
+            currentIndex: boundedIndex,
+            isPlaying: true,
+            currentTime: 0,
+            duration: songToPlay.duration || 0,
+            audioUrl: audioUrl,
+            shuffleQueue: state.isShuffle ? buildShuffleQueue(newQueue, songToPlay._id) : [],
+            isLoading: false,
+        });
+
+        // Save as last played song (only for online songs)
+        if (!audioUrl.startsWith('file://')) {
+            saveLastSong(songToPlay);
         }
     },
 
@@ -217,9 +267,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     resumeSong: () => {
-        const { currentSong } = get();
+        const { currentSong, audioUrl } = get();
         if (currentSong) {
-            set({ isPlaying: true });
+            // If no audio URL, load it
+            if (!audioUrl && currentSong.audioUrl) {
+                set({
+                    isPlaying: true,
+                    audioUrl: getFullAudioUrl(currentSong.audioUrl)
+                });
+            } else {
+                set({ isPlaying: true });
+            }
         }
     },
 
@@ -242,44 +300,90 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     playNext: () => {
-        const { queue, currentIndex, isShuffle, shuffleQueue, isLooping } = get();
+        const state = get();
+        const { queue, currentIndex, isShuffle, shuffleQueue, isLooping, currentSong } = state;
 
         if (queue.length === 0) return;
 
-        let nextSong: Song | undefined;
-        let nextIndex = currentIndex;
+        // Handle case when no song is playing yet
+        if (currentIndex === -1) {
+            const nextSong = queue[0];
+            set({
+                currentSong: nextSong,
+                currentIndex: 0,
+                isPlaying: true,
+                currentTime: 0,
+                audioUrl: getFullAudioUrl(nextSong.audioUrl),
+                shuffleQueue: isShuffle ? buildShuffleQueue(queue, nextSong._id) : shuffleQueue,
+            });
+            return;
+        }
 
-        if (isShuffle && shuffleQueue.length > 0) {
-            // Get next from shuffle queue
-            nextSong = shuffleQueue[0];
-            const newShuffleQueue = shuffleQueue.slice(1);
+        if (isShuffle) {
+            let [nextSong, ...remainingQueue] = shuffleQueue;
 
-            // Rebuild shuffle queue if empty and looping
-            if (newShuffleQueue.length === 0 && isLooping) {
-                set({ shuffleQueue: buildShuffleQueue(queue, nextSong._id) });
-            } else {
-                set({ shuffleQueue: newShuffleQueue });
+            if (!nextSong) {
+                // Shuffle queue is empty
+                if (!isLooping) {
+                    // Not looping - stop playback
+                    set({
+                        isPlaying: false,
+                        currentTime: 0,
+                    });
+                    return;
+                }
+                // Looping - rebuild shuffle queue
+                const rebuilt = buildShuffleQueue(queue, currentSong?._id);
+                [nextSong, ...remainingQueue] = rebuilt;
             }
 
-            nextIndex = queue.findIndex(s => s._id === nextSong?._id);
-        } else {
-            // Normal sequential playback
-            nextIndex = (currentIndex + 1) % queue.length;
-
-            // If we've wrapped around and not looping, stop
-            if (nextIndex === 0 && !isLooping && currentIndex !== -1) {
-                set({ isPlaying: false, currentTime: 0 });
+            if (!nextSong) {
+                // Still no song (shouldn't happen)
+                set({
+                    isPlaying: false,
+                    currentTime: 0,
+                });
                 return;
             }
 
-            nextSong = queue[nextIndex];
+            const updatedIndex = queue.findIndex((song) => song._id === nextSong._id);
+
+            set({
+                currentSong: nextSong,
+                isPlaying: true,
+                currentTime: 0,
+                currentIndex: updatedIndex === -1 ? currentIndex : updatedIndex,
+                shuffleQueue: remainingQueue,
+                audioUrl: getFullAudioUrl(nextSong.audioUrl),
+            });
+            return;
         }
 
-        if (nextSong) {
-            set({ currentIndex: nextIndex });
-            get().playSong(nextSong);
+        // Normal sequential playback
+        const isLastIndex = currentIndex === queue.length - 1;
+        if (isLastIndex && !isLooping) {
+            set({
+                isPlaying: false,
+                currentTime: 0,
+            });
+            return;
         }
+
+        const nextIndex = isLastIndex ? 0 : currentIndex + 1;
+        const nextSong = queue[nextIndex];
+
+        if (!nextSong) return;
+
+        set({
+            currentSong: nextSong,
+            isPlaying: true,
+            currentTime: 0,
+            currentIndex: nextIndex,
+            shuffleQueue: isShuffle ? buildShuffleQueue(queue, nextSong._id) : shuffleQueue,
+            audioUrl: getFullAudioUrl(nextSong.audioUrl),
+        });
     },
+
 
     playPrevious: () => {
         const { queue, currentIndex, currentTime } = get();
@@ -306,6 +410,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     seekTo: (position: number) => {
         set({ currentTime: position });
+        // The VideoPlayer component will handle the actual seek
     },
 
     setVolume: (volume: number) => {
@@ -340,8 +445,56 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     setQueue: (songs: Song[]) => {
-        set({ queue: songs });
+        const state = get();
+        const currentSongId = state.currentSong?._id;
+        const newQueue = [...songs];
+
+        // Find the current song's position in the new queue
+        const newIndex = currentSongId
+            ? newQueue.findIndex((song) => song._id === currentSongId)
+            : -1;
+
+        if (newQueue.length === 0) {
+            set({
+                queue: [],
+                currentIndex: -1,
+                currentSong: null,
+                isPlaying: false,
+                shuffleQueue: [],
+                audioUrl: null,
+            });
+            return;
+        }
+
+        if (state.currentSong) {
+            if (newIndex !== -1) {
+                // Current song found in new queue
+                set({
+                    queue: newQueue,
+                    currentIndex: newIndex,
+                    shuffleQueue: state.isShuffle ? buildShuffleQueue(newQueue, state.currentSong._id) : state.shuffleQueue,
+                });
+            } else {
+                // Current song not in new queue, reset to first song (don't auto-play)
+                set({
+                    queue: newQueue,
+                    currentIndex: 0,
+                    currentSong: newQueue[0],
+                    isPlaying: false,
+                    shuffleQueue: state.isShuffle ? buildShuffleQueue(newQueue, newQueue[0]._id) : state.shuffleQueue,
+                    audioUrl: null,
+                });
+            }
+        } else {
+            // No current song - just set the queue, don't auto-select
+            set({
+                queue: newQueue,
+                currentIndex: -1,
+                shuffleQueue: state.isShuffle ? buildShuffleQueue(newQueue) : [],
+            });
+        }
     },
+
 
     addToQueue: (song: Song) => {
         const { queue } = get();
@@ -356,7 +509,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     clearQueue: () => {
-        set({ queue: [], currentIndex: -1, shuffleQueue: [] });
+        set({ queue: [], currentIndex: -1, shuffleQueue: [], audioUrl: null });
     },
 
     updateProgress: (position: number, duration: number) => {
@@ -398,12 +551,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
     },
 
+    onPlaybackEnd: () => {
+        const { isLooping } = get();
+        if (isLooping) {
+            get().playNext();
+        } else {
+            set({ isPlaying: false, currentTime: 0 });
+        }
+    },
+
     cleanup: () => {
         set({
             currentSong: null,
             isPlaying: false,
             currentTime: 0,
             duration: 0,
+            audioUrl: null,
         });
     },
 }));

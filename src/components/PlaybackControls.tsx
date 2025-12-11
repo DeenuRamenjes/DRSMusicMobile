@@ -10,7 +10,6 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS } from '../constants/theme';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { useMusicStore } from '../store/useMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { getFullImageUrl } from '../config';
 
@@ -31,10 +30,8 @@ export const PlaybackControls = () => {
     playPrevious,
     seekTo,
     restoreLastSong,
-    setQueue,
   } = usePlayerStore();
 
-  const { songs } = useMusicStore();
   const { colors: themeColors, compactMode } = useThemeStore();
 
   // Restore last song on mount (if any)
@@ -51,16 +48,7 @@ export const PlaybackControls = () => {
     initializePlayer();
   }, []);
 
-  // Set queue when songs are loaded (but don't auto-select a song)
-  useEffect(() => {
-    if (songs.length > 0) {
-      const state = usePlayerStore.getState();
-      // Only set the queue if it's empty
-      if (state.queue.length === 0) {
-        setQueue(songs);
-      }
-    }
-  }, [songs.length]);
+
   
   const handleOpenSongDetail = () => {
     if (!currentSong) return;

@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '../constants/theme';
 import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { Song, Album } from '../types';
 import { getFullImageUrl } from '../config';
 
@@ -29,6 +31,7 @@ const formatDuration = (duration: number) => {
 // Album Card Component
 const AlbumCard = ({ album, onPress }: { album: Album; onPress: () => void }) => {
   const { currentSong, isPlaying } = usePlayerStore();
+  const { colors: themeColors } = useThemeStore();
   const isCurrentAlbumPlaying = album.songs?.some(s => s._id === currentSong?._id) && isPlaying;
 
   return (
@@ -42,10 +45,13 @@ const AlbumCard = ({ album, onPress }: { album: Album; onPress: () => void }) =>
           source={{ uri: getFullImageUrl(album.imageUrl) }}
           style={styles.albumImage}
         />
-        <View style={styles.albumPlayButton}>
-          <Text style={styles.albumPlayIcon}>
-            {isCurrentAlbumPlaying ? '⏸' : '▶'}
-          </Text>
+        <View style={[styles.albumPlayButton, { backgroundColor: themeColors.primary }]}>
+          <Icon 
+            name={isCurrentAlbumPlaying ? 'pause' : 'play'} 
+            size={16} 
+            color="#fff" 
+            style={!isCurrentAlbumPlaying && { marginLeft: 2 }}
+          />
         </View>
       </View>
       <Text style={styles.albumTitle} numberOfLines={1}>{album.title}</Text>
@@ -58,6 +64,7 @@ const AlbumCard = ({ album, onPress }: { album: Album; onPress: () => void }) =>
 const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) => {
   const { currentSong, isPlaying, playAlbum, pauseSong } = usePlayerStore();
   const { fetchAlbumById, currentAlbum, isLoading } = useMusicStore();
+  const { colors: themeColors } = useThemeStore();
 
   useEffect(() => {
     fetchAlbumById(album._id);
@@ -90,7 +97,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={themeColors.primary} />
       </View>
     );
   }
@@ -131,13 +138,16 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
           {/* Play Button */}
           <View style={styles.playButtonContainer}>
             <TouchableOpacity
-              style={styles.mainPlayButton}
+              style={[styles.mainPlayButton, { backgroundColor: themeColors.primary }]}
               onPress={handlePlayAlbum}
               activeOpacity={0.8}
             >
-              <Text style={styles.mainPlayIcon}>
-                {isCurrentAlbumPlaying ? '⏸' : '▶'}
-              </Text>
+              <Icon 
+                name={isCurrentAlbumPlaying ? 'pause' : 'play'} 
+                size={28} 
+                color={COLORS.background}
+                style={!isCurrentAlbumPlaying && { marginLeft: 3 }}
+              />
             </TouchableOpacity>
           </View>
 
@@ -156,7 +166,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
 
               return (
                 <TouchableOpacity
-                  key={song._id}
+                  key={`${song._id}-${index}`}
                   style={styles.songRow}
                   onPress={() => handlePlaySong(index)}
                   activeOpacity={0.7}
@@ -290,6 +300,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.background,
   },
 
   // Hero Header
@@ -351,18 +362,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: SPACING.sm,
     right: SPACING.sm,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    opacity: 0.9,
-  },
-  albumPlayIcon: {
-    fontSize: 18,
-    color: COLORS.background,
-    marginLeft: 2,
+    opacity: 0.95,
   },
   albumTitle: {
     fontSize: FONT_SIZES.md,

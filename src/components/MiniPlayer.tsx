@@ -7,6 +7,7 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { RootStackParamList } from '../types';
@@ -55,13 +56,18 @@ export const MiniPlayer = () => {
             style={styles.controlButton}
             onPress={togglePlayPause}
           >
-            <Text style={styles.controlIcon}>{isPlaying ? '⏸' : '▶️'}</Text>
+            <Icon 
+              name={isPlaying ? 'pause' : 'play'} 
+              size={24} 
+              color={COLORS.textPrimary}
+              style={!isPlaying && { marginLeft: 2 }}
+            />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.controlButton}
             onPress={playNext}
           >
-            <Text style={styles.controlIcon}>⏭</Text>
+            <Icon name="skip-forward" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -130,8 +136,5 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  controlIcon: {
-    fontSize: 24,
   },
 });

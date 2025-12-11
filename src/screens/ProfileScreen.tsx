@@ -10,10 +10,12 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS } from '../constants/theme';
 import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
 
@@ -64,6 +66,7 @@ export const ProfileScreen = () => {
   const { albums, likedSongs, likedSongsLoading, likedSongsInitialized, fetchLikedSongs } = useMusicStore();
   const { currentSong, isPlaying, playSong, pauseSong } = usePlayerStore();
   const { user, isAuthenticated } = useAuthStore();
+  const { colors: themeColors } = useThemeStore();
   
   const [stats, setStats] = useState({
     totalSongs: 0,
@@ -195,10 +198,13 @@ export const ProfileScreen = () => {
                   source={{ uri: getFullImageUrl(currentSong.imageUrl) }}
                   style={styles.nowPlayingImage}
                 />
-                <View style={styles.nowPlayingOverlay}>
-                  <Text style={styles.nowPlayingPlayIcon}>
-                    {isPlaying ? '⏸' : '▶'}
-                  </Text>
+                <View style={[styles.nowPlayingOverlay, { backgroundColor: themeColors.primary }]}>
+                  <Icon 
+                    name={isPlaying ? 'pause' : 'play'} 
+                    size={24} 
+                    color="#fff"
+                    style={!isPlaying && { marginLeft: 3 }}
+                  />
                 </View>
               </View>
               <View style={styles.nowPlayingInfo}>
@@ -256,10 +262,13 @@ export const ProfileScreen = () => {
                     source={{ uri: getFullImageUrl(song.imageUrl) }}
                     style={styles.likedSongImage}
                   />
-                  <View style={styles.likedSongOverlay}>
-                    <Text style={styles.likedSongPlayIcon}>
-                      {currentSong?._id === song._id && isPlaying ? '⏸' : '▶'}
-                    </Text>
+                  <View style={[styles.likedSongOverlay, { backgroundColor: themeColors.primary }]}>
+                    <Icon 
+                      name={currentSong?._id === song._id && isPlaying ? 'pause' : 'play'} 
+                      size={18} 
+                      color="#fff"
+                      style={!(currentSong?._id === song._id && isPlaying) && { marginLeft: 2 }}
+                    />
                   </View>
                 </View>
                 <View style={styles.likedSongInfo}>
@@ -315,8 +324,8 @@ export const ProfileScreen = () => {
                   source={{ uri: getFullImageUrl(album.imageUrl) }}
                   style={styles.libraryImage}
                 />
-                <View style={styles.libraryPlayButton}>
-                  <Text style={styles.libraryPlayIcon}>▶</Text>
+                <View style={[styles.libraryPlayButton, { backgroundColor: themeColors.primary }]}>
+                  <Icon name="play" size={16} color="#fff" style={{ marginLeft: 2 }} />
                 </View>
               </View>
               <Text style={styles.libraryTitle} numberOfLines={1}>{album.title}</Text>
