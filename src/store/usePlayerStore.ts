@@ -292,6 +292,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         const state = get();
         const { queue, currentIndex, isShuffle, shuffleQueue, isLooping, currentSong } = state;
 
+        console.log('[PlayerStore] playNext called. Queue length:', queue.length, 'CurrentIndex:', currentIndex);
+
         if (queue.length === 0) return;
 
         // Handle case when no song is playing yet
@@ -337,6 +339,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
             const updatedIndex = queue.findIndex((song) => song._id === nextSong._id);
 
+            console.log('[PlayerStore] Playing next (shuffle):', nextSong.title);
+
             set({
                 currentSong: nextSong,
                 isPlaying: true,
@@ -362,6 +366,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         const nextSong = queue[nextIndex];
 
         if (!nextSong) return;
+
+        console.log('[PlayerStore] Playing next (sequential):', nextSong.title, 'Index:', nextIndex);
 
         set({
             currentSong: nextSong,
@@ -551,12 +557,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     onPlaybackEnd: () => {
-        const { isLooping } = get();
-        if (isLooping) {
-            get().playNext();
-        } else {
-            set({ isPlaying: false, currentTime: 0 });
-        }
+        // Always call playNext - it handles the queue end and loop logic correctly
+        // playNext will stop playback if we're at the end and not looping
+        console.log('[PlayerStore] onPlaybackEnd called, triggering playNext');
+        get().playNext();
     },
 
     cleanup: () => {

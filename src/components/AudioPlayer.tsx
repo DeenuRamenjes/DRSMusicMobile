@@ -1,265 +1,252 @@
-import React, { useRef, useEffect, useCallback } from 'react';
-import { StyleSheet, Platform } from 'react-native';
-import Video, { OnProgressData, OnLoadData, VideoRef } from 'react-native-video';
-import MusicControl, { Command } from 'react-native-music-control';
+import React, { useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
+import TrackPlayer, {
+    Capability,
+    State,
+    usePlaybackState,
+    useProgress,
+    RepeatMode,
+    AppKilledPlaybackBehavior,
+} from 'react-native-track-player';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { getFullImageUrl } from '../config';
+import { getFullAudioUrl, getFullImageUrl } from '../config';
+
+// Track if TrackPlayer is initialized
+let isTrackPlayerInitialized = false;
 
 /**
- * AudioPlayer - A hidden component that handles audio playback using react-native-video
- * with notification controls via react-native-music-control
+ * Initialize TrackPlayer with proper configuration
+ */
+export const setupTrackPlayer = async (): Promise<boolean> => {
+    if (isTrackPlayerInitialized) {
+        return true;
+    }
+
+    try {
+        // Check if already setup
+        try {
+            await TrackPlayer.getActiveTrackIndex();
+            isTrackPlayerInitialized = true;
+            console.log('[TrackPlayer] Already initialized');
+            return true;
+        } catch {
+            // Not initialized, continue with setup
+        }
+
+        await TrackPlayer.setupPlayer({
+            autoHandleInterruptions: true,
+        });
+
+        // Configure player capabilities (notification controls)
+        await TrackPlayer.updateOptions({
+            capabilities: [
+                Capability.Play,
+                Capability.Pause,
+                Capability.SkipToNext,
+                Capability.SkipToPrevious,
+                Capability.SeekTo,
+                Capability.Stop,
+            ],
+            notificationCapabilities: [
+                Capability.Play,
+                Capability.Pause,
+                Capability.SkipToNext,
+                Capability.SkipToPrevious,
+                Capability.SeekTo,
+            ],
+            progressUpdateEventInterval: 1,
+            android: {
+                appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+            },
+        });
+
+        // Set repeat mode to OFF - we handle queue advancement manually
+        await TrackPlayer.setRepeatMode(RepeatMode.Off);
+
+        isTrackPlayerInitialized = true;
+        console.log('[TrackPlayer] Setup complete');
+        return true;
+    } catch (error) {
+        console.error('[TrackPlayer] Setup error:', error);
+        return false;
+    }
+};
+
+/**
+ * AudioPlayer - Component that manages TrackPlayer and syncs with Zustand store
  */
 export const AudioPlayer = () => {
-    const videoRef = useRef<VideoRef>(null);
-    const seekTimeRef = useRef<number | null>(null);
     const isInitializedRef = useRef(false);
-    
+    const lastSongIdRef = useRef<string | null>(null);
+    const appStateRef = useRef(AppState.currentState);
+    const isLoadingTrackRef = useRef(false);
+
     const {
         audioUrl,
         currentSong,
         isPlaying,
-        volume,
-        isMuted,
-        currentTime,
-        duration,
         updateProgress,
-        onPlaybackEnd,
     } = usePlayerStore();
 
-    // Initialize MusicControl once - use getState() for callbacks to avoid stale closures
+    // Get playback state from TrackPlayer
+    const playbackState = usePlaybackState();
+    const progress = useProgress(500);
+
+    // Initialize TrackPlayer on mount
     useEffect(() => {
-        if (isInitializedRef.current) return;
-        
-        try {
-            // Enable background mode
-            MusicControl.enableBackgroundMode(true);
+        const initialize = async () => {
+            if (isInitializedRef.current) return;
             
-            // Enable controls on lock screen
-            MusicControl.enableControl('play', true);
-            MusicControl.enableControl('pause', true);
-            MusicControl.enableControl('stop', false);
-            MusicControl.enableControl('nextTrack', true);
-            MusicControl.enableControl('previousTrack', true);
-            MusicControl.enableControl('seekForward', false);
-            MusicControl.enableControl('seekBackward', false);
-            MusicControl.enableControl('seek', true);
-            MusicControl.enableControl('skipForward', false);
-            MusicControl.enableControl('skipBackward', false);
-            MusicControl.enableControl('togglePlayPause', true);
-            
-            if (Platform.OS === 'android') {
-                MusicControl.enableControl('closeNotification', true, { when: 'paused' });
+            const success = await setupTrackPlayer();
+            if (success) {
+                isInitializedRef.current = true;
+                console.log('[AudioPlayer] TrackPlayer initialized');
             }
-            
-            // Register event handlers - use getState() to get fresh references
-            MusicControl.on(Command.play, () => {
-                usePlayerStore.getState().setIsPlaying(true);
-            });
-            
-            MusicControl.on(Command.pause, () => {
-                usePlayerStore.getState().setIsPlaying(false);
-            });
-            
-            MusicControl.on(Command.stop, () => {
-                usePlayerStore.getState().setIsPlaying(false);
-            });
-            
-            MusicControl.on(Command.nextTrack, () => {
-                usePlayerStore.getState().playNext();
-            });
-            
-            MusicControl.on(Command.previousTrack, () => {
-                usePlayerStore.getState().playPrevious();
-            });
-            
-            MusicControl.on(Command.seek, (pos: number) => {
-                if (videoRef.current) {
-                    videoRef.current.seek(pos);
-                    const store = usePlayerStore.getState();
-                    store.updateProgress(pos, store.duration);
-                }
-            });
+        };
 
-            MusicControl.on(Command.closeNotification, () => {
-                usePlayerStore.getState().setIsPlaying(false);
-            });
+        initialize();
+    }, []);
 
-            MusicControl.on(Command.togglePlayPause, () => {
-                const store = usePlayerStore.getState();
-                store.setIsPlaying(!store.isPlaying);
-            });
-            
-            isInitializedRef.current = true;
-        } catch (error) {
-            console.error('[MusicControl] Init error:', error);
-        }
-        
+    // Handle app state changes
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+            console.log('[AudioPlayer] App state changed:', appStateRef.current, '->', nextAppState);
+            appStateRef.current = nextAppState;
+        });
+
         return () => {
-            try {
-                MusicControl.stopControl();
-            } catch (error) {
-                console.error('[MusicControl] Cleanup error:', error);
-            }
+            subscription.remove();
         };
     }, []);
 
-    // Update notification when song changes
+    // Sync progress to store
     useEffect(() => {
-        if (!currentSong || !isInitializedRef.current) return;
-        
-        try {
-            MusicControl.setNowPlaying({
-                title: currentSong.title || 'Unknown Title',
-                artist: currentSong.artist || 'Unknown Artist',
-                album: '',
-                genre: '',
-                duration: Number(currentSong.duration) || 0,
-                description: '',
-                color: 0x1DB954, // Green color
-                colorized: true,
-                isLiveStream: false,
-                artwork: currentSong.imageUrl 
-                    ? getFullImageUrl(currentSong.imageUrl) 
-                    : undefined,
-            });
-        } catch (error) {
-            console.error('[MusicControl] Set now playing error:', error);
+        if (progress.duration > 0) {
+            updateProgress(progress.position, progress.duration);
         }
-    }, [currentSong?._id, currentSong?.title]);
+    }, [progress.position, progress.duration, updateProgress]);
 
+    // Sync current song changes to TrackPlayer
     useEffect(() => {
+        const loadTrack = async () => {
+            if (!currentSong || !audioUrl || !isInitializedRef.current) return;
 
-        if (!isInitializedRef.current) return;
-        
-        try {
-            MusicControl.updatePlayback({
-                state: isPlaying ? MusicControl.STATE_PLAYING : MusicControl.STATE_PAUSED,
-                elapsedTime: Number(currentTime) || 0,
-            });
-        } catch (error) {
-            console.error('[MusicControl] Update playback error:', error);
-        }
-    }, [isPlaying]); 
-
-    useEffect(() => {
-        const unsubscribe = usePlayerStore.subscribe((state, prevState) => {
-            const timeDiff = Math.abs(state.currentTime - prevState.currentTime);
-            if (timeDiff > 1 && videoRef.current) {
-                seekTimeRef.current = state.currentTime;
-                videoRef.current.seek(state.currentTime);
-            }
-        });
-        
-        return () => unsubscribe();
-    }, []);
-
-    useEffect(() => {
-        if (!isInitializedRef.current || !isPlaying) return;
-        
-        try {
-            MusicControl.updatePlayback({
-                elapsedTime: Number(currentTime) || 0,
-            });
-        } catch (error) {
-            // Ignore
-        }
-    }, [Math.floor(currentTime / 5)]);
-
-    const handleProgress = useCallback((data: OnProgressData) => {
-        if (seekTimeRef.current !== null) {
-            const diff = Math.abs(data.currentTime - seekTimeRef.current);
-            if (diff < 0.5) {
-                seekTimeRef.current = null; 
-            }
-            return;
-        }
-        updateProgress(data.currentTime, data.seekableDuration || data.playableDuration);
-    }, [updateProgress]);
-
-    const handleLoad = useCallback((data: OnLoadData) => {
-        updateProgress(0, data.duration);
-        
-        // Update duration in notification
-        if (currentSong && isInitializedRef.current) {
-            try {
-                MusicControl.setNowPlaying({
-                    title: currentSong.title || 'Unknown Title',
-                    artist: currentSong.artist || 'Unknown Artist',
-                    duration: Number(data.duration) || 0,
-                    artwork: currentSong.imageUrl 
-                        ? getFullImageUrl(currentSong.imageUrl) 
-                        : undefined,
-                });
-            } catch (error) {
-                console.error('[MusicControl] Update duration error:', error);
-            }
-        }
-    }, [updateProgress, currentSong]);
-
-    const handleEnd = useCallback(() => {
-        onPlaybackEnd();
-    }, [onPlaybackEnd]);
-
-    const handleError = useCallback((error: any) => {
-        console.error('[AudioPlayer] Playback error:', error);
-        console.error('[AudioPlayer] Audio URL was:', audioUrl);
-        usePlayerStore.getState().setIsPlaying(false);
-    }, [audioUrl]);
-
-    const handleBuffer = useCallback((data: { isBuffering: boolean }) => {
-        if (data.isBuffering) {
-            if (isInitializedRef.current) {
+            // Avoid reloading the same track
+            if (lastSongIdRef.current === currentSong._id) {
+                // Just control playback for same song
                 try {
-                    MusicControl.updatePlayback({
-                        state: MusicControl.STATE_BUFFERING,
-                    });
+                    const state = playbackState.state;
+                    if (isPlaying && state !== State.Playing) {
+                        await TrackPlayer.play();
+                    } else if (!isPlaying && state === State.Playing) {
+                        await TrackPlayer.pause();
+                    }
                 } catch (error) {
                     // Ignore
                 }
+                return;
             }
-        }
-    }, []);
 
-    const handleReadyForDisplay = useCallback(() => {
-    }, []);
+            lastSongIdRef.current = currentSong._id;
+            isLoadingTrackRef.current = true;
+            console.log('[TrackPlayer] Loading new track:', currentSong.title);
 
+            try {
+                // Get current queue
+                const queue = await TrackPlayer.getQueue();
+                
+                // If there's a track playing, just skip to end and add new track
+                if (queue.length > 0) {
+                    // Remove all tracks from queue
+                    await TrackPlayer.removeUpcomingTracks();
+                    
+                    // Add new track
+                    await TrackPlayer.add({
+                        id: currentSong._id,
+                        url: audioUrl,
+                        title: currentSong.title || 'Unknown Title',
+                        artist: currentSong.artist || 'Unknown Artist',
+                        artwork: currentSong.imageUrl 
+                            ? getFullImageUrl(currentSong.imageUrl) 
+                            : undefined,
+                        duration: currentSong.duration || 0,
+                    });
+                    
+                    // Skip to the new track
+                    await TrackPlayer.skipToNext();
+                    
+                    // Remove the old track (now at position 0)
+                    try {
+                        await TrackPlayer.remove(0);
+                    } catch (e) {
+                        // Ignore if removal fails
+                    }
+                } else {
+                    // No tracks in queue, just add and play
+                    await TrackPlayer.add({
+                        id: currentSong._id,
+                        url: audioUrl,
+                        title: currentSong.title || 'Unknown Title',
+                        artist: currentSong.artist || 'Unknown Artist',
+                        artwork: currentSong.imageUrl 
+                            ? getFullImageUrl(currentSong.imageUrl) 
+                            : undefined,
+                        duration: currentSong.duration || 0,
+                    });
+                }
+
+                // Ensure repeat is off
+                await TrackPlayer.setRepeatMode(RepeatMode.Off);
+
+                // Play the track
+                await TrackPlayer.play();
+                console.log('[TrackPlayer] Track loaded and playing');
+            } catch (error) {
+                console.error('[TrackPlayer] Error loading track:', error);
+            } finally {
+                isLoadingTrackRef.current = false;
+            }
+        };
+
+        loadTrack();
+    }, [currentSong?._id, audioUrl]);
+
+    // Sync play/pause state from store to TrackPlayer
     useEffect(() => {
-    }, [audioUrl]);
+        const syncPlayState = async () => {
+            if (!isInitializedRef.current || isLoadingTrackRef.current) return;
 
-    if (!audioUrl) {
-        return null;
-    }
+            try {
+                const currentState = playbackState.state;
+                
+                if (isPlaying && currentState !== State.Playing && currentState !== State.Buffering) {
+                    await TrackPlayer.play();
+                } else if (!isPlaying && currentState === State.Playing) {
+                    await TrackPlayer.pause();
+                }
+            } catch (error) {
+                console.error('[TrackPlayer] Play state sync error:', error);
+            }
+        };
 
-    return (
-        <Video
-            ref={videoRef}
-            source={{ uri: audioUrl }}
-            style={styles.hidden}
-            paused={!isPlaying}
-            volume={isMuted ? 0 : volume}
-            onProgress={handleProgress}
-            onLoad={handleLoad}
-            onEnd={handleEnd}
-            onError={handleError}
-            onBuffer={handleBuffer}
-            onReadyForDisplay={handleReadyForDisplay}
-            progressUpdateInterval={500}
-            playInBackground={true}
-            playWhenInactive={true}
-            ignoreSilentSwitch="ignore"
-            resizeMode="none"
-            automaticallyWaitsToMinimizeStalling={false}
-        />
-    );
+        syncPlayState();
+    }, [isPlaying, playbackState.state]);
+
+    // Listen for seek requests from store
+    useEffect(() => {
+        const unsubscribe = usePlayerStore.subscribe((state, prevState) => {
+            const timeDiff = Math.abs(state.currentTime - prevState.currentTime);
+            // If time changed by more than 1 second, it's likely a seek
+            if (timeDiff > 1 && isInitializedRef.current) {
+                TrackPlayer.seekTo(state.currentTime).catch(() => {});
+            }
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    // This component doesn't render anything visible
+    return null;
 };
-
-const styles = StyleSheet.create({
-    hidden: {
-        width: 0,
-        height: 0,
-        position: 'absolute',
-        opacity: 0,
-    },
-});
 
 export default AudioPlayer;
