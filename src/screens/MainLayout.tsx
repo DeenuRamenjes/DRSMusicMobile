@@ -14,7 +14,13 @@ import {
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS } from '../constants/theme';
+import {
+  COLORS,
+  SPACING,
+  FONT_SIZES,
+  BORDER_RADIUS,
+  DIMENSIONS,
+} from '../constants/theme';
 import { HomeScreen } from './HomeScreen';
 import { SongsScreen } from './SongsScreen';
 import { AlbumsScreen } from './AlbumsScreen';
@@ -30,20 +36,19 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useNavigation } from '@react-navigation/native';
 import { getFullImageUrl } from '../config';
 
-
 const DRSLogo = require('../assets/DRS.png');
 
 const Tab = createBottomTabNavigator();
 
 // Left Sidebar Component (matching web app)
-const LeftSidebar = ({ 
-  onNavigate, 
+const LeftSidebar = ({
+  onNavigate,
   onOpenFriends,
   onOpenMessages,
   onTabNavigate,
   stackNavigation,
-}: { 
-  onNavigate?: () => void; 
+}: {
+  onNavigate?: () => void;
   onOpenFriends?: () => void;
   onOpenMessages?: () => void;
   onTabNavigate?: (screen: string) => void;
@@ -74,8 +79,6 @@ const LeftSidebar = ({
     onTabNavigate?.(screen);
   };
 
-
-
   const handleAlbumPress = async (album: any) => {
     onNavigate?.();
     // Set the pending album ID so AlbumsScreen opens that album
@@ -95,7 +98,7 @@ const LeftSidebar = ({
     <View style={styles.sidebar}>
       {/* Navigation Section */}
       <View style={styles.sidebarNav}>
-        {navItems.map((item) => (
+        {navItems.map(item => (
           <TouchableOpacity
             key={item.screen}
             style={styles.navItem}
@@ -153,8 +156,6 @@ const LeftSidebar = ({
             <Text style={styles.navLabel}>Offline Music</Text>
           </View>
         </TouchableOpacity>
-
-
       </View>
 
       {/* Divider */}
@@ -169,44 +170,42 @@ const LeftSidebar = ({
           </View>
         </View>
 
-        <ScrollView 
+        <ScrollView
           style={styles.albumList}
           showsVerticalScrollIndicator={false}
         >
-          {isLoading ? (
-            // Skeleton loading
-            [...Array(5)].map((_, i) => (
-              <View key={i} style={styles.albumItemSkeleton}>
-                <View style={styles.albumImageSkeleton} />
-                <View style={styles.albumTextSkeleton}>
-                  <View style={styles.albumTitleSkeleton} />
-                  <View style={styles.albumSubtitleSkeleton} />
+          {isLoading
+            ? // Skeleton loading
+              [...Array(5)].map((_, i) => (
+                <View key={i} style={styles.albumItemSkeleton}>
+                  <View style={styles.albumImageSkeleton} />
+                  <View style={styles.albumTextSkeleton}>
+                    <View style={styles.albumTitleSkeleton} />
+                    <View style={styles.albumSubtitleSkeleton} />
+                  </View>
                 </View>
-              </View>
-            ))
-          ) : (
-            albums.map((album) => (
-              <TouchableOpacity
-                key={album._id}
-                style={styles.albumItem}
-                onPress={() => handleAlbumPress(album)}
-                activeOpacity={0.7}
-              >
-                <Image
-                  source={{ uri: getFullImageUrl(album.imageUrl) }}
-                  style={styles.albumImage}
-                />
-                <View style={styles.albumInfo}>
-                  <Text style={styles.albumTitle} numberOfLines={1}>
-                    {album.title}
-                  </Text>
-                  <Text style={styles.albumSubtitle} numberOfLines={1}>
-                    Album • {album.artist}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
+              ))
+            : albums.map(album => (
+                <TouchableOpacity
+                  key={album._id}
+                  style={styles.albumItem}
+                  onPress={() => handleAlbumPress(album)}
+                  activeOpacity={0.7}
+                >
+                  <Image
+                    source={{ uri: getFullImageUrl(album.imageUrl) }}
+                    style={styles.albumImage}
+                  />
+                  <View style={styles.albumInfo}>
+                    <Text style={styles.albumTitle} numberOfLines={1}>
+                      {album.title}
+                    </Text>
+                    <Text style={styles.albumSubtitle} numberOfLines={1}>
+                      Album • {album.artist}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
         </ScrollView>
       </View>
     </View>
@@ -214,8 +213,8 @@ const LeftSidebar = ({
 };
 
 // Custom Tab Bar Component
-const CustomTabBar = ({ 
-  state, 
+const CustomTabBar = ({
+  state,
   navigation,
   isSidebarOpen,
   setIsSidebarOpen,
@@ -240,7 +239,7 @@ const CustomTabBar = ({
     <View style={styles.tabBar}>
       {items.map((item, index) => {
         const isFocused = state.index === index;
-        
+
         return (
           <TouchableOpacity
             key={item.name}
@@ -261,17 +260,25 @@ const CustomTabBar = ({
   );
 };
 
-// Main Layout Component
+// Admin email - only this user can see the admin button
+const ADMIN_EMAILS = [
+  'demo@drsmusic.com',
+  'deenuramenjes29@gmail.com',
+  'rohith17r.3@gmail.com',
+];
+
 export const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   const tabNavigationRef = React.useRef<any>(null);
   const stackNavigation = useNavigation();
-  const { currentSong } = usePlayerStore();
-  const { albums, fetchAlbums } = useMusicStore();
-  const { isOfflineMode, setOfflineMode, downloadedSongs } = useOfflineMusicStore();
+  const { fetchAlbums } = useMusicStore();
+  const { user } = useAuthStore();
+  const { isOfflineMode, setOfflineMode } = useOfflineMusicStore();
   const { colors: themeColors } = useThemeStore();
   const slideAnim = useState(new Animated.Value(-300))[0];
+
+  const isAdmin = ADMIN_EMAILS.includes(user?.emailAddress ?? '');
 
   useEffect(() => {
     if (!isOfflineMode) {
@@ -309,22 +316,26 @@ export const MainLayout = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
+
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <View style={styles.sidebarOverlay}>
           {/* Backdrop */}
-          <Pressable 
+          <Pressable
             style={styles.backdrop}
             onPress={() => setIsSidebarOpen(false)}
           />
-          
+
           {/* Sidebar Panel */}
-          <Animated.View 
+          <Animated.View
             style={[
               styles.sidebarPanel,
-              { transform: [{ translateX: slideAnim }] }
+              { transform: [{ translateX: slideAnim }] },
             ]}
           >
             {/* Sidebar Header */}
@@ -333,16 +344,14 @@ export const MainLayout = () => {
                 <Image source={DRSLogo} style={styles.DRSLogo} />
                 <Text style={styles.sidebarLogoText}>DRS Music</Text>
               </View>
-              <TouchableOpacity
-                onPress={() => setIsSidebarOpen(false)}
-              >
+              <TouchableOpacity onPress={() => setIsSidebarOpen(false)}>
                 <Text style={styles.closeIcon}>✕</Text>
               </TouchableOpacity>
             </View>
-            
+
             {/* Sidebar Content */}
-            <LeftSidebar 
-              onNavigate={handleSidebarNavigate} 
+            <LeftSidebar
+              onNavigate={handleSidebarNavigate}
               onOpenFriends={handleOpenFriends}
               onOpenMessages={handleOpenMessages}
               onTabNavigate={handleTabNavigate}
@@ -367,39 +376,73 @@ export const MainLayout = () => {
           </View>
 
           {/* Logo */}
-          <View style={styles.headerCenter}>
+          <TouchableOpacity 
+            style={styles.headerCenter}
+            onPress={() => tabNavigationRef.current?.navigate('Home' as never)}
+            activeOpacity={0.7}
+          >
             <Image source={DRSLogo} style={styles.DRSLogo} />
             <Text style={styles.headerLogoText}>DRS Music</Text>
             {isOfflineMode && (
-              <View style={[styles.offlineBadge, { backgroundColor: themeColors.primaryMuted }]}>
-                <Text style={[styles.offlineBadgeText, { color: themeColors.primary }]}>
+              <View
+                style={[
+                  styles.offlineBadge,
+                  { backgroundColor: themeColors.primaryMuted },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.offlineBadgeText,
+                    { color: themeColors.primary },
+                  ]}
+                >
                   Offline
                 </Text>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
 
-          {/* Online/Offline Toggle */}
+          {/* Online/Offline Toggle and Admin Button */}
           <View style={styles.headerRight}>
+            {/* Admin Button - Only visible to admin */}
+            {isAdmin && (
+              <TouchableOpacity
+                onPress={() => (stackNavigation as any).navigate('Admin')}
+                style={[
+                  styles.modeToggle,
+                  {
+                    backgroundColor: themeColors.primaryMuted,
+                    marginRight: SPACING.xs,
+                  },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Icon name="shield" size={16} color={themeColors.primary} />
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               onPress={() => {
                 const newMode = !isOfflineMode;
                 setOfflineMode(newMode);
-                // Navigate to Home tab when switching modes
                 if (tabNavigationRef.current) {
                   tabNavigationRef.current.navigate('Home');
                 }
               }}
               style={[
                 styles.modeToggle,
-                { backgroundColor: isOfflineMode ? themeColors.primaryMuted : COLORS.zinc800 }
+                {
+                  backgroundColor: isOfflineMode
+                    ? themeColors.primaryMuted
+                    : COLORS.zinc800,
+                },
               ]}
               activeOpacity={0.7}
             >
-              <Icon 
-                name={isOfflineMode ? 'wifi-off' : 'wifi'} 
-                size={16} 
-                color={isOfflineMode ? themeColors.primary : COLORS.textMuted} 
+              <Icon
+                name={isOfflineMode ? 'wifi-off' : 'wifi'}
+                size={16}
+                color={isOfflineMode ? themeColors.primary : COLORS.textMuted}
               />
             </TouchableOpacity>
           </View>
@@ -409,7 +452,7 @@ export const MainLayout = () => {
       {/* Main Content - Tab Navigator (without visible tab bar) */}
       <View style={styles.content}>
         <Tab.Navigator
-          tabBar={(props) => {
+          tabBar={props => {
             // Capture navigation for sidebar use using ref (no state update during render)
             if (!tabNavigationRef.current && props.navigation) {
               tabNavigationRef.current = props.navigation;
@@ -452,7 +495,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-   DRSLogo: {
+  DRSLogo: {
     width: 32,
     height: 32,
   },
@@ -499,8 +542,10 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     width: 40,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   offlineBadge: {
     paddingHorizontal: SPACING.sm,
@@ -516,6 +561,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
+    marginRight: 28,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
@@ -660,7 +706,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(63, 63, 70, 0.5)',
   },
-
 
   // Library Section
   librarySection: {

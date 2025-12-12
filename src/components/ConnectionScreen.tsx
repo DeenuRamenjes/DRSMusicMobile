@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Image,
 } from 'react-native';
 import { COLORS, SPACING, FONT_SIZES } from '../constants/theme';
 import { useConnectionStore } from '../store/useConnectionStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import Icon from 'react-native-vector-icons/Feather';
+
+const DRSLogo = require('../assets/DRS.png');
 
 interface ConnectionScreenProps {
   onRetry?: () => void;
@@ -82,6 +85,7 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
   const isMaxRetriesReached = retryCount >= maxRetries;
   const hasDownloadedSongs = downloadedSongs.length > 0;
 
+
   return (
     <View style={styles.container}>
       <View style={styles.content}>
@@ -91,19 +95,12 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
             styles.iconContainer,
             { 
               transform: [
-                { scale: pulseAnim },
                 { rotate: spin }
               ] 
             }
           ]}
         >
-          <View style={[styles.iconCircle, { borderColor: themeColors.primary }]}>
-            <Icon 
-              name="cloud" 
-              size={48} 
-              color={themeColors.primary} 
-            />
-          </View>
+            <Image source={DRSLogo} style={{ width: 100, height: 100 }} />
         </Animated.View>
 
         {/* Status Text */}
@@ -132,7 +129,7 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
         <View style={[styles.infoBox, { backgroundColor: themeColors.primaryMuted }]}>
           <Icon name="info" size={16} color={themeColors.primary} />
           <Text style={[styles.infoText, { color: themeColors.primary }]}>
-            The server uses a free plan and may take up to 30 seconds to wake up. 
+            The server uses a free plan and may take up to 1 Minute to wake up. 
             Thanks for your patience!
           </Text>
         </View>

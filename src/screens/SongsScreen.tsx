@@ -19,6 +19,7 @@ import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
+import ProfileHeader from '../components/ProfileHeader';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
@@ -200,6 +201,7 @@ export const SongsScreen = () => {
 
   return (
     <View style={styles.container}>
+      <ProfileHeader/>
       {/* Hero Header */}
       <View style={styles.heroContainer}>
         <LinearGradient

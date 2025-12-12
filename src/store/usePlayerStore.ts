@@ -138,29 +138,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         const audioUrl = getFullAudioUrl(song.audioUrl);
         const isLocalFile = audioUrl.startsWith('file://');
 
-        console.log('playSong: Processing', song.title);
-        console.log('playSong: Audio URL:', audioUrl);
-        console.log('playSong: Is local file:', isLocalFile);
-
         // Find the song in the queue
         let songIndex = state.queue.findIndex((s) => s._id === song._id);
 
         // For local/offline files, if not in queue, add it to queue
         if (songIndex === -1) {
             if (isLocalFile) {
-                console.log('playSong: Local file not in queue, adding it');
                 // Add song to queue for local files
                 const newQueue = [...state.queue, song];
                 songIndex = newQueue.length - 1;
                 set({ queue: newQueue });
             } else {
                 console.error('playSong: Remote song not found in queue:', song.title);
-                console.log('playSong: Current queue length:', state.queue.length);
                 return;
             }
         }
-
-        console.log('playSong: Playing from queue index', songIndex, ':', song.title);
 
         const updates: Partial<PlayerState> = {
             currentSong: song,
@@ -239,9 +231,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
         const newQueue = [...songs];
         const audioUrl = getFullAudioUrl(songToPlay.audioUrl);
-
-        console.log('playAlbum: Setting queue with', newQueue.length, 'songs, playing index', boundedIndex, ':', songToPlay.title);
-        console.log('playAlbum: Audio URL:', audioUrl);
 
         // Set everything atomically like web app
         set({

@@ -9,6 +9,14 @@ import { SongDetailScreen } from '../screens/SongDetailScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { MessagesScreen } from '../screens/MessagesScreen';
 import { OfflineMusicScreen } from '../screens/OfflineMusicScreen';
+import { AdminScreen } from '../screens/AdminScreen';
+import { ManageSongsScreen } from '../screens/ManageSongsScreen';
+import { UploadSongScreen } from '../screens/UploadSongScreen';
+import { ManageAlbumsScreen } from '../screens/ManageAlbumsScreen';
+import { ManageUsersScreen } from '../screens/ManageUsersScreen';
+import { CreateAlbumScreen } from '../screens/CreateAlbumScreen';
+import { EditAlbumScreen } from '../screens/EditAlbumScreen';
+import { EditSongScreen } from '../screens/EditSongScreen';
 import { ConnectionScreen } from '../components/ConnectionScreen';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
@@ -156,6 +164,62 @@ export const AppNavigator = () => {
         <Stack.Screen 
           name="OfflineMusic" 
           component={OfflineMusicScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="Admin" 
+          component={AdminScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="ManageSongs" 
+          component={ManageSongsScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="UploadSong" 
+          component={UploadSongScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="ManageAlbums" 
+          component={ManageAlbumsScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="ManageUsers" 
+          component={ManageUsersScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="CreateAlbum" 
+          component={CreateAlbumScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="EditAlbum" 
+          component={EditAlbumScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen 
+          name="EditSong" 
+          component={EditSongScreen}
           options={{
             gestureDirection: 'horizontal',
           }}

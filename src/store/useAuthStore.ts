@@ -102,8 +102,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isLoading: false,
             error: null,
         });
-
-        console.log('✅ User logged in:', user.name || user.emailAddress);
     },
 
     logout: () => {
@@ -117,8 +115,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isLoading: false,
             error: null,
         });
-
-        console.log('👋 User logged out');
     },
 
     checkAuth: async () => {
@@ -132,23 +128,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             ]);
 
             if (!token) {
-                console.log('🔑 No stored token found');
                 set({ isAuthenticated: false, isLoading: false, user: null });
                 return;
             }
 
-            // If we have stored user data and token, restore the session immediately
-            // This provides instant login experience
             if (storedUser) {
-                console.log('✅ Restoring session for:', storedUser.name || storedUser.emailAddress);
                 set({
                     isAuthenticated: true,
                     user: storedUser,
                     isLoading: false,
                 });
 
-                // Optionally verify with backend in background (don't block or logout on failure)
-                // This refreshes user data if backend is available
                 try {
                     const response = await axiosInstance.get('/auth/me');
                     if (response.data) {
@@ -167,18 +157,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         // Update stored user data
                         setUserData(updatedUser);
                         set({ user: updatedUser });
-                        console.log('✅ User data refreshed from backend');
                     }
                 } catch (error) {
-                    // Don't logout on network errors - keep using stored data
-                    console.log('⚠️ Could not refresh user data from backend (using cached)');
                 }
 
                 return;
             }
 
-            // No stored user but have token - try to get user from backend
-            console.log('🔄 Token found, fetching user data...');
             const response = await axiosInstance.get('/auth/me');
 
             if (response.data) {
@@ -202,7 +187,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     user,
                     isLoading: false,
                 });
-                console.log('✅ User authenticated:', user.name || user.emailAddress);
             } else {
                 set({ isAuthenticated: false, isLoading: false, user: null });
             }
@@ -212,7 +196,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // Check if we have stored user data - if so, keep the session
             const storedUser = await getUserData();
             if (storedUser) {
-                console.log('✅ Using cached user data despite auth error');
                 set({
                     isAuthenticated: true,
                     user: storedUser,
@@ -224,7 +207,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // Only logout if we truly have no valid session data
             // Don't clear token on network errors - only on 401
             if (error.response?.status === 401) {
-                console.log('🚫 Token invalid, clearing session');
                 removeToken();
                 removeUserData();
             }

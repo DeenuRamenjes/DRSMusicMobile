@@ -5,6 +5,14 @@ export type RootStackParamList = {
     MainTabs: undefined;
     SongDetail: { songId: string };
     AlbumDetail: { albumId: string };
+    Admin: undefined;
+    ManageSongs: undefined;
+    UploadSong: undefined;
+    ManageAlbums: undefined;
+    ManageUsers: undefined;
+    CreateAlbum: undefined;
+    EditAlbum: { album: Album };
+    EditSong: { song: Song };
 };
 
 export type MainTabParamList = {

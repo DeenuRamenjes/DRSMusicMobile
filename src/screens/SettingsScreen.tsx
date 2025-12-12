@@ -9,7 +9,6 @@ import {
   Switch,
   ActivityIndicator,
   Modal,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +17,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useThemeStore } from '../store/useThemeStore';
 import axiosInstance from '../api/axios';
+import { CustomDialog, useDialog } from '../components/CustomDialog';
 
 // Toggle Component - iOS Style
 const Toggle = ({ enabled, onChange, themeColor }: { enabled: boolean; onChange: () => void; themeColor?: string }) => (
@@ -158,6 +158,7 @@ const SelectOption = ({
 export const SettingsScreen = () => {
   const navigation = useNavigation();
   const { user, logout, isAuthenticated } = useAuthStore();
+  const { dialogState, hideDialog, showError, showConfirm } = useDialog();
   const { 
     audioQuality, 
     setAudioQuality, 
@@ -326,40 +327,30 @@ export const SettingsScreen = () => {
   };
 
   const handleSignOut = () => {
-    Alert.alert(
+    showConfirm(
       'Sign Out',
       'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
-          style: 'destructive',
-          onPress: () => logout()
-        },
-      ]
+      () => logout(),
+      'Sign Out',
+      true
     );
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    showConfirm(
       'Delete Account',
       'This will permanently delete your account and all your data. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await axiosInstance.delete('/users/me');
-              logout();
-            } catch (error) {
-              console.error('Failed to delete account:', error);
-              Alert.alert('Error', 'Failed to delete account');
-            }
-          }
-        },
-      ]
+      async () => {
+        try {
+          await axiosInstance.delete('/users/me');
+          logout();
+        } catch (error) {
+          console.error('Failed to delete account:', error);
+          showError('Error', 'Failed to delete account');
+        }
+      },
+      'Delete',
+      true
     );
   };
 
@@ -572,6 +563,16 @@ export const SettingsScreen = () => {
         {/* Bottom spacing */}
         <View style={{ height: DIMENSIONS.playbackHeight + SPACING.xxl }} />
       </ScrollView>
+
+      {/* Custom Dialog */}
+      <CustomDialog
+        visible={dialogState.visible}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        buttons={dialogState.buttons}
+        onClose={hideDialog}
+      />
     </View>
   );
 };

@@ -13,7 +13,7 @@ export const axiosInstance = axios.create({
 // Request interceptor
 axiosInstance.interceptors.request.use(
     async (config) => {
-        console.log(`📡 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+        // console.log(`📡 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
 
         try {
             const token = await AsyncStorage.getItem('authToken');
@@ -31,14 +31,14 @@ axiosInstance.interceptors.request.use(
 // Response interceptor
 axiosInstance.interceptors.response.use(
     (response) => {
-        console.log(`✅ ${response.config.url} - ${response.status}`);
+        // console.log(`✅ ${response.config.url} - ${response.status}`);
         return response;
     },
     (error) => {
-        console.error('❌ API Error:', {
-            url: error.config?.url,
-            message: error.message,
-        });
+        // console.error('❌ API Error:', {
+        //     url: error.config?.url,
+        //     message: error.message,
+        // });
         return Promise.reject(error);
     }
 );

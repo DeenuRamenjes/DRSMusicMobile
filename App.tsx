@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LogBox } from 'react-native';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AudioPlayer } from './src/components/AudioPlayer';
+import { NotificationBanner } from './src/components/NotificationBanner';
 
 // Ignore specific warnings
 LogBox.ignoreLogs([
@@ -21,6 +22,8 @@ function App(): React.JSX.Element {
       <AppNavigator />
       {/* Hidden audio player component */}
       <AudioPlayer />
+      {/* Notification banner for broadcast notifications */}
+      <NotificationBanner />
     </SafeAreaProvider>
   );
 }

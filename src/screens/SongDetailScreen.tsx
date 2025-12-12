@@ -14,7 +14,6 @@ import {
   Modal,
   FlatList,
   Share,
-  Alert,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,6 +27,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import { getFullImageUrl, getFullAudioUrl } from '../config';
 import { Song } from '../types';
+import { CustomDialog, useDialog } from '../components/CustomDialog';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -40,6 +40,7 @@ export const SongDetailScreen = () => {
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const { dialogState, hideDialog, showSuccess, showError, showConfirm } = useDialog();
   
   const {
     currentSong,
@@ -166,61 +167,44 @@ export const SongDetailScreen = () => {
 
     // Check if already downloaded
     if (isDownloaded(currentSong._id)) {
-      Alert.alert(
+      showConfirm(
         'Already Downloaded',
-        `"${currentSong.title}" is already available offline.`,
-        [
-          { text: 'OK', style: 'default' },
-          { 
-            text: 'Remove Download', 
-            style: 'destructive',
-            onPress: async () => {
-              const success = await deleteSong(currentSong._id);
-              if (success) {
-                Alert.alert('Removed', 'Song removed from downloads.');
-              }
-            }
-          },
-        ]
+        `"${currentSong.title}" is already available offline. Would you like to remove it?`,
+        async () => {
+          const success = await deleteSong(currentSong._id);
+          if (success) {
+            showSuccess('Removed', 'Song removed from downloads.');
+          }
+        },
+        'Remove Download',
+        true
       );
       return;
     }
 
     // Show confirmation dialog
-    Alert.alert(
+    showConfirm(
       'Download Song',
       `Download "${currentSong.title}" by ${currentSong.artist} for offline listening?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Download',
-          style: 'default',
-          onPress: async () => {
-            setIsDownloading(true);
-            try {
-              const audioUrl = getFullAudioUrl(currentSong.audioUrl);
-              const success = await downloadSong(currentSong, audioUrl);
-              
-              if (success) {
-                Alert.alert(
-                  'Download Complete',
-                  `"${currentSong.title}" is now available offline!`
-                );
-              } else {
-                Alert.alert(
-                  'Download Failed',
-                  'Could not download the song. Please try again.'
-                );
-              }
-            } catch (error) {
-              console.error('Download error:', error);
-              Alert.alert('Download Failed', 'Could not download the song. Please try again.');
-            } finally {
-              setIsDownloading(false);
-            }
-          },
-        },
-      ]
+      async () => {
+        setIsDownloading(true);
+        try {
+          const audioUrl = getFullAudioUrl(currentSong.audioUrl);
+          const success = await downloadSong(currentSong, audioUrl);
+          
+          if (success) {
+            showSuccess('Download Complete', `"${currentSong.title}" is now available offline!`);
+          } else {
+            showError('Download Failed', 'Could not download the song. Please try again.');
+          }
+        } catch (error) {
+          console.error('Download error:', error);
+          showError('Download Failed', 'Could not download the song. Please try again.');
+        } finally {
+          setIsDownloading(false);
+        }
+      },
+      'Download'
     );
   };
 
@@ -490,13 +474,13 @@ export const SongDetailScreen = () => {
               <Text style={styles.menuItemText}>Share song</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity 
+            {/* <TouchableOpacity 
               style={styles.menuItem}
               onPress={handleViewLyrics}
             >
               <Icon name="file-text" size={20} color={COLORS.textPrimary} />
               <Text style={styles.menuItemText}>View Lyrics</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
             
             <TouchableOpacity 
               style={styles.menuItem}
@@ -518,16 +502,6 @@ export const SongDetailScreen = () => {
                     ? 'Downloaded'
                     : 'Download'}
               </Text>
-            </TouchableOpacity>
-            
-            <View style={styles.menuDivider} />
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => setIsMenuOpen(false)}
-            >
-              <Icon name="x" size={20} color={COLORS.textMuted} />
-              <Text style={[styles.menuItemText, { color: COLORS.textMuted }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -590,6 +564,16 @@ export const SongDetailScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Dialog */}
+      <CustomDialog
+        visible={dialogState.visible}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        buttons={dialogState.buttons}
+        onClose={hideDialog}
+      />
       </SafeAreaView>
     </View>
   );
@@ -847,7 +831,7 @@ const styles = StyleSheet.create({
   // Menu Modal Styles
   menuModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    // backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   menuPanel: {
     position: 'absolute',
@@ -889,7 +873,6 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   queuePanel: {
     backgroundColor: 'rgba(24, 24, 27, 0.98)',

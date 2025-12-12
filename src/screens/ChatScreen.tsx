@@ -125,10 +125,6 @@ export const ChatScreen = () => {
   const currentUserId = authUser?.clerkId || authUser?.id || '';
   const chatUserId = chatUser.clerkId || chatUser._id;
 
-  console.log('🔍 ChatScreen IDs:', { currentUserId, chatUserId });
-  console.log('🔍 authUser:', authUser);
-  console.log('🔍 chatUser:', chatUser);
-
   // Check if user is online
   const isOnline = onlineUsers.has(chatUserId);
   const activity = userActivities.get(chatUserId);
@@ -141,7 +137,6 @@ export const ChatScreen = () => {
     clearUnreadCount(chatUserId);
     
     if (chatUserId) {
-      console.log('📨 Fetching messages for:', chatUserId);
       fetchMessages(chatUserId);
     }
     

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,30 +9,72 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
-  TextInput,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS as DIMS } from '../constants/theme';
+import LinearGradient from 'react-native-linear-gradient';
+import {
+  COLORS,
+  SPACING,
+  FONT_SIZES,
+  BORDER_RADIUS,
+  DIMENSIONS as DIMS,
+} from '../constants/theme';
 import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { useAuthStore } from '../store/useAuthStore';
 import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
-
-// Import the DRS logo
-const DRSLogo = require('../assets/DRS.png');
+import ProfileHeader from '../components/ProfileHeader';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
+
+// Login Banner Component for unauthenticated users
+const LoginBanner = ({ 
+  themeColors, 
+  onLogin 
+}: { 
+  themeColors: { primary: string }; 
+  onLogin: () => void;
+}) => {
+  return (
+    <LinearGradient
+      colors={[themeColors.primary + '40', themeColors.primary + '10']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={styles.loginBanner}
+    >
+      <View style={styles.loginBannerContent}>
+        <View style={styles.loginBannerIcon}>
+          <Icon name="user" size={24} color={themeColors.primary} />
+        </View>
+        <View style={styles.loginBannerText}>
+          <Text style={styles.loginBannerTitle}>Sign in to unlock all features</Text>
+          <Text style={styles.loginBannerSubtitle}>
+            Like songs, sync playlists, and more
+          </Text>
+        </View>
+      </View>
+      <TouchableOpacity
+        style={[styles.loginBannerButton, { backgroundColor: themeColors.primary }]}
+        onPress={onLogin}
+      >
+        <Text style={styles.loginBannerButtonText}>Sign In</Text>
+        <Icon name="arrow-right" size={16} color="#fff" />
+      </TouchableOpacity>
+    </LinearGradient>
+  );
+};
 
 // Featured Section Component - Horizontal cards like web app
 const FeaturedSection = () => {
   const navigation = useNavigation();
   const { featuredSongs, isLoading, error } = useMusicStore();
-  const { currentSong, isPlaying, playSong, pauseSong, playAlbum } = usePlayerStore();
+  const { currentSong, isPlaying, playSong, pauseSong, playAlbum } =
+    usePlayerStore();
   const { colors: themeColors } = useThemeStore();
 
   const playFromFeatured = (song: Song, index: number) => {
@@ -65,7 +107,7 @@ const FeaturedSection = () => {
           <Text style={styles.sectionTitle}>Featured</Text>
         </View>
         <View style={styles.loadingContainer}>
-          {[1, 2].map((i) => (
+          {[1, 2].map(i => (
             <View key={i} style={styles.featuredSkeleton}>
               <View style={styles.featuredSkeletonImage} />
               <View style={styles.featuredSkeletonText} />
@@ -90,7 +132,9 @@ const FeaturedSection = () => {
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Featured</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Songs' as never)}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Songs' as never)}
+          >
             <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
         </View>
@@ -124,18 +168,31 @@ const FeaturedSection = () => {
               style={styles.featuredImage}
             />
             <View style={styles.featuredInfo}>
-              <Text style={styles.featuredTitle} numberOfLines={1}>{song.title}</Text>
-              <Text style={styles.featuredArtist} numberOfLines={1}>{song.artist}</Text>
+              <Text style={styles.featuredTitle} numberOfLines={1}>
+                {song.title}
+              </Text>
+              <Text style={styles.featuredArtist} numberOfLines={1}>
+                {song.artist}
+              </Text>
             </View>
             <TouchableOpacity
-              style={[styles.featuredPlayButton, { backgroundColor: themeColors.primary }]}
+              style={[
+                styles.featuredPlayButton,
+                { backgroundColor: themeColors.primary },
+              ]}
               onPress={() => handlePlayPress(song, index)}
             >
-              <Icon 
-                name={currentSong?._id === song._id && isPlaying ? 'pause' : 'play'} 
-                size={20} 
+              <Icon
+                name={
+                  currentSong?._id === song._id && isPlaying ? 'pause' : 'play'
+                }
+                size={20}
                 color="#fff"
-                style={!(currentSong?._id === song._id && isPlaying) && { marginLeft: 2 }}
+                style={
+                  !(currentSong?._id === song._id && isPlaying) && {
+                    marginLeft: 2,
+                  }
+                }
               />
             </TouchableOpacity>
           </TouchableOpacity>
@@ -153,11 +210,17 @@ interface SectionGridProps {
   viewAllPath?: string;
 }
 
-const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps) => {
+const SectionGrid = ({
+  title,
+  songs,
+  isLoading,
+  viewAllPath,
+}: SectionGridProps) => {
   const navigation = useNavigation();
-  const { currentSong, isPlaying, playSong, pauseSong, playAlbum } = usePlayerStore();
+  const { currentSong, isPlaying, playSong, pauseSong, playAlbum } =
+    usePlayerStore();
   const { colors: themeColors } = useThemeStore();
-  
+
   const maxVisibleCards = 4; // 2x2 grid on mobile
   const visibleSongs = songs.slice(0, maxVisibleCards);
 
@@ -189,7 +252,7 @@ const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps)
       <View style={styles.sectionContainer}>
         <Text style={styles.sectionTitle}>{title}</Text>
         <View style={styles.gridContainer}>
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4].map(i => (
             <View key={i} style={styles.gridSkeleton}>
               <View style={styles.gridSkeletonImage} />
               <View style={styles.gridSkeletonText} />
@@ -249,14 +312,25 @@ const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps)
               )}
               {/* Play Button */}
               <TouchableOpacity
-                style={[styles.gridPlayButton, { backgroundColor: themeColors.primary }]}
+                style={[
+                  styles.gridPlayButton,
+                  { backgroundColor: themeColors.primary },
+                ]}
                 onPress={() => handlePlayPress(song, index)}
               >
-                <Icon 
-                  name={currentSong?._id === song._id && isPlaying ? 'pause' : 'play'} 
-                  size={16} 
+                <Icon
+                  name={
+                    currentSong?._id === song._id && isPlaying
+                      ? 'pause'
+                      : 'play'
+                  }
+                  size={16}
                   color="#fff"
-                  style={!(currentSong?._id === song._id && isPlaying) && { marginLeft: 2 }}
+                  style={
+                    !(currentSong?._id === song._id && isPlaying) && {
+                      marginLeft: 2,
+                    }
+                  }
                 />
               </TouchableOpacity>
               {/* Active indicator */}
@@ -289,11 +363,17 @@ const SectionGrid = ({ title, songs, isLoading, viewAllPath }: SectionGridProps)
 
 // Offline Mode View Component
 const OfflineModeView = () => {
-  const { downloadedSongs, deviceSongs, isScanning, scanDeviceMusic, loadDownloadedSongs } = useOfflineMusicStore();
-  const { playSong, setQueue, currentSong, isPlaying } = usePlayerStore();
+  const {
+    downloadedSongs,
+    deviceSongs,
+    isScanning,
+    scanDeviceMusic,
+    loadDownloadedSongs,
+  } = useOfflineMusicStore();
+  const { currentSong, isPlaying } = usePlayerStore();
   const { colors: themeColors } = useThemeStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
+
   const allOfflineSongs = [...downloadedSongs, ...deviceSongs];
 
   useEffect(() => {
@@ -304,11 +384,13 @@ const OfflineModeView = () => {
     // Prepare all songs with proper file:// URLs
     const queueSongs = allOfflineSongs.map(s => ({
       ...s,
-      audioUrl: s.localPath 
-        ? (s.localPath.startsWith('file://') ? s.localPath : `file://${s.localPath}`)
+      audioUrl: s.localPath
+        ? s.localPath.startsWith('file://')
+          ? s.localPath
+          : `file://${s.localPath}`
         : s.audioUrl,
     }));
-    
+
     // Use playAlbum to set queue and play atomically
     const { playAlbum } = usePlayerStore.getState();
     playAlbum(queueSongs as any, index);
@@ -317,25 +399,39 @@ const OfflineModeView = () => {
   const renderGridItem = (song: any, index: number) => {
     const isCurrentSong = currentSong?._id === song._id;
     return (
-      <TouchableOpacity 
-        key={song._id} 
-        style={[styles.offlineGridItem, isCurrentSong && styles.offlineGridItemActive]}
+      <TouchableOpacity
+        key={song._id}
+        style={[
+          styles.offlineGridItem,
+          isCurrentSong && styles.offlineGridItemActive,
+        ]}
         onPress={() => handlePlaySong(song, index)}
       >
         <View style={styles.offlineGridImage}>
           {song.imageUrl ? (
-            <Image source={{ uri: getFullImageUrl(song.imageUrl) }} style={styles.offlineGridImageContent} />
+            <Image
+              source={{ uri: getFullImageUrl(song.imageUrl) }}
+              style={styles.offlineGridImageContent}
+            />
           ) : (
             <View style={styles.offlineGridPlaceholder}>
               <Icon name="music" size={32} color={COLORS.textMuted} />
             </View>
           )}
           <View style={styles.offlinePlayOverlay}>
-            <Icon name={isCurrentSong && isPlaying ? "pause" : "play"} size={20} color="#fff" />
+            <Icon
+              name={isCurrentSong && isPlaying ? 'pause' : 'play'}
+              size={20}
+              color="#fff"
+            />
           </View>
         </View>
-        <Text style={styles.offlineGridTitle} numberOfLines={1}>{song.title}</Text>
-        <Text style={styles.offlineGridArtist} numberOfLines={1}>{song.artist}</Text>
+        <Text style={styles.offlineGridTitle} numberOfLines={1}>
+          {song.title}
+        </Text>
+        <Text style={styles.offlineGridArtist} numberOfLines={1}>
+          {song.artist}
+        </Text>
       </TouchableOpacity>
     );
   };
@@ -343,14 +439,20 @@ const OfflineModeView = () => {
   const renderListItem = (song: any, index: number) => {
     const isCurrentSong = currentSong?._id === song._id;
     return (
-      <TouchableOpacity 
-        key={song._id} 
-        style={[styles.offlineListItem, isCurrentSong && styles.offlineListItemActive]}
+      <TouchableOpacity
+        key={song._id}
+        style={[
+          styles.offlineListItem,
+          isCurrentSong && styles.offlineListItemActive,
+        ]}
         onPress={() => handlePlaySong(song, index)}
       >
         <View style={styles.offlineListImage}>
           {song.imageUrl ? (
-            <Image source={{ uri: getFullImageUrl(song.imageUrl) }} style={styles.offlineListImageContent} />
+            <Image
+              source={{ uri: getFullImageUrl(song.imageUrl) }}
+              style={styles.offlineListImageContent}
+            />
           ) : (
             <View style={styles.offlineListPlaceholder}>
               <Icon name="music" size={24} color={COLORS.textMuted} />
@@ -358,13 +460,28 @@ const OfflineModeView = () => {
           )}
         </View>
         <View style={styles.offlineListInfo}>
-          <Text style={[styles.offlineListTitle, isCurrentSong && { color: themeColors.primary }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.offlineListTitle,
+              isCurrentSong && { color: themeColors.primary },
+            ]}
+            numberOfLines={1}
+          >
             {song.title}
           </Text>
-          <Text style={styles.offlineListArtist} numberOfLines={1}>{song.artist}</Text>
+          <Text style={styles.offlineListArtist} numberOfLines={1}>
+            {song.artist}
+          </Text>
         </View>
-        <TouchableOpacity style={styles.offlineListPlay} onPress={() => handlePlaySong(song, index)}>
-          <Icon name={isCurrentSong && isPlaying ? "pause" : "play"} size={20} color={themeColors.primary} />
+        <TouchableOpacity
+          style={styles.offlineListPlay}
+          onPress={() => handlePlaySong(song, index)}
+        >
+          <Icon
+            name={isCurrentSong && isPlaying ? 'pause' : 'play'}
+            size={20}
+            color={themeColors.primary}
+          />
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -379,16 +496,34 @@ const OfflineModeView = () => {
           {/* View Mode Toggle */}
           <View style={styles.viewModeToggle}>
             <TouchableOpacity
-              style={[styles.viewModeBtn, viewMode === 'grid' && styles.viewModeBtnActive]}
+              style={[
+                styles.viewModeBtn,
+                viewMode === 'grid' && styles.viewModeBtnActive,
+              ]}
               onPress={() => setViewMode('grid')}
             >
-              <Icon name="grid" size={18} color={viewMode === 'grid' ? themeColors.primary : COLORS.textMuted} />
+              <Icon
+                name="grid"
+                size={18}
+                color={
+                  viewMode === 'grid' ? themeColors.primary : COLORS.textMuted
+                }
+              />
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.viewModeBtn, viewMode === 'list' && styles.viewModeBtnActive]}
+              style={[
+                styles.viewModeBtn,
+                viewMode === 'list' && styles.viewModeBtnActive,
+              ]}
               onPress={() => setViewMode('list')}
             >
-              <Icon name="list" size={18} color={viewMode === 'list' ? themeColors.primary : COLORS.textMuted} />
+              <Icon
+                name="list"
+                size={18}
+                color={
+                  viewMode === 'list' ? themeColors.primary : COLORS.textMuted
+                }
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -425,14 +560,17 @@ const OfflineModeView = () => {
           </Text>
         </View>
       ) : (
-        <ScrollView 
-          contentContainerStyle={viewMode === 'grid' ? styles.offlineGridContainer : styles.offlineListContainer}
+        <ScrollView
+          contentContainerStyle={
+            viewMode === 'grid'
+              ? styles.offlineGridContainer
+              : styles.offlineListContainer
+          }
           showsVerticalScrollIndicator={false}
         >
-          {viewMode === 'grid' 
+          {viewMode === 'grid'
             ? allOfflineSongs.map((song, index) => renderGridItem(song, index))
-            : allOfflineSongs.map((song, index) => renderListItem(song, index))
-          }
+            : allOfflineSongs.map((song, index) => renderListItem(song, index))}
           <View style={{ height: DIMS.playbackHeight + SPACING.xl }} />
         </ScrollView>
       )}
@@ -444,9 +582,6 @@ const OfflineModeView = () => {
 export const HomeScreen = () => {
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
-  const [searchVisible, setSearchVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const { user } = useAuthStore();
   const {
     fetchFeaturedSongs,
     fetchMadeForYouSongs,
@@ -462,19 +597,25 @@ export const HomeScreen = () => {
     error,
   } = useMusicStore();
 
-  const { currentSong, setQueue, queue, isPlaying, playSong } = usePlayerStore();
+  const { currentSong, setQueue, queue } =
+    usePlayerStore();
   const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
   const { colors: themeColors } = useThemeStore();
+  const { isAuthenticated } = useAuthStore();
 
-  const handleProfilePress = () => {
-    // Navigate to Profile tab - for now just log
-    console.log('Profile pressed');
+  const handleLogin = () => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'Landing' as never }],
+      })
+    );
   };
 
   useEffect(() => {
     // Skip fetching if in offline mode
     if (isOfflineMode) return;
-    
+
     const fetchSongs = async () => {
       try {
         await Promise.all([
@@ -496,7 +637,7 @@ export const HomeScreen = () => {
       setQueue(downloadedSongs as any);
       return;
     }
-    
+
     if (!isLoading && !isOfflineMode) {
       const allSongs = [
         ...madeForYouSongs,
@@ -504,12 +645,24 @@ export const HomeScreen = () => {
         ...trendingSongs,
         ...likedSongs,
       ];
-      const shouldSeedQueue = allSongs.length > 0 && !currentSong && queue.length === 0;
+      const shouldSeedQueue =
+        allSongs.length > 0 && !currentSong && queue.length === 0;
       if (shouldSeedQueue) {
         setQueue(allSongs);
       }
     }
-  }, [isLoading, madeForYouSongs, featuredSongs, trendingSongs, likedSongs, setQueue, currentSong, queue.length, isOfflineMode, downloadedSongs]);
+  }, [
+    isLoading,
+    madeForYouSongs,
+    featuredSongs,
+    trendingSongs,
+    likedSongs,
+    setQueue,
+    currentSong,
+    queue.length,
+    isOfflineMode,
+    downloadedSongs,
+  ]);
 
   const onRefresh = async () => {
     if (isOfflineMode) return; // Don't refresh in offline mode
@@ -523,45 +676,18 @@ export const HomeScreen = () => {
     setRefreshing(false);
   };
 
-  // Search filtering logic
-  const allSongsForSearch = useMemo(() => {
-    return [...new Map([
-      ...madeForYouSongs,
-      ...featuredSongs,
-      ...trendingSongs,
-      ...likedSongs,
-    ].map(song => [song._id, song])).values()];
-  }, [madeForYouSongs, featuredSongs, trendingSongs, likedSongs]);
-
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase().trim();
-    return allSongsForSearch.filter(song => 
-      song.title?.toLowerCase().includes(query) ||
-      song.artist?.toLowerCase().includes(query)
-    ).slice(0, 20);
-  }, [searchQuery, allSongsForSearch]);
-
-  const handleSearchResultPlay = (song: Song, index: number) => {
-    if (currentSong?._id === song._id) {
-      if (!isPlaying) {
-        playSong(song);
-      }
-      return;
-    }
-    // Set search results as queue and play
-    const { playAlbum } = usePlayerStore.getState();
-    playAlbum(searchResults, index);
-    (navigation as any).navigate('SongDetail', { songId: song._id });
-  };
-
   // Don't show error in offline mode
   if (error && !isOfflineMode) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: COLORS.background }]}>
+      <View
+        style={[styles.errorContainer, { backgroundColor: COLORS.background }]}
+      >
         <Text style={styles.errorTitle}>Error loading songs</Text>
         <Text style={styles.errorMessage}>{error}</Text>
-        <TouchableOpacity style={[styles.retryButton, { backgroundColor: themeColors.primary }]} onPress={onRefresh}>
+        <TouchableOpacity
+          style={[styles.retryButton, { backgroundColor: themeColors.primary }]}
+          onPress={onRefresh}
+        >
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -584,58 +710,7 @@ export const HomeScreen = () => {
 
   return (
     <View style={styles.screenContainer}>
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        {/* Left: Logo */}
-        <View style={styles.topBarLeft}>
-          <Image source={DRSLogo} style={styles.logo} resizeMode="contain" />
-          <Text style={styles.logoText}>DRS Music</Text>
-        </View>
-
-        {/* Right: Search and Profile */}
-        <View style={styles.topBarRight}>
-          <TouchableOpacity 
-            style={styles.topBarIcon}
-            onPress={() => setSearchVisible(!searchVisible)}
-          >
-            <Icon name="search" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.profileButton}
-            onPress={handleProfilePress}
-          >
-            {user?.imageUrl ? (
-              <Image source={{ uri: user.imageUrl }} style={styles.profileImage} />
-            ) : (
-              <View style={styles.profilePlaceholder}>
-                <Icon name="user" size={18} color={COLORS.textMuted} />
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Search Bar - Expandable */}
-      {searchVisible && (
-        <View style={styles.searchContainer}>
-          <Icon name="search" size={18} color={COLORS.textMuted} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search songs, albums, artists..."
-            placeholderTextColor={COLORS.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoFocus
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="x" size={18} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
+      <ProfileHeader/>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
@@ -649,92 +724,41 @@ export const HomeScreen = () => {
           />
         }
       >
-        {/* Search Results - Show when searching */}
-        {searchQuery.trim().length > 0 ? (
-          <View style={styles.searchResultsContainer}>
-            <Text style={styles.searchResultsTitle}>
-              Search Results {searchResults.length > 0 ? `(${searchResults.length})` : ''}
-            </Text>
-            {searchResults.length === 0 ? (
-              <View style={styles.noResultsContainer}>
-                <Icon name="search" size={48} color={COLORS.textMuted} />
-                <Text style={styles.noResultsText}>No songs found for "{searchQuery}"</Text>
-                <Text style={styles.noResultsSubtext}>Try searching for something else</Text>
-              </View>
-            ) : (
-              searchResults.map((song, index) => {
-                const isCurrentSong = currentSong?._id === song._id;
-                const isThisSongPlaying = isCurrentSong && isPlaying;
-                return (
-                  <TouchableOpacity
-                    key={song._id}
-                    style={[styles.searchResultItem, isCurrentSong && styles.searchResultItemActive]}
-                    onPress={() => handleSearchResultPlay(song, index)}
-                    activeOpacity={0.7}
-                  >
-                    <Image
-                      source={{ uri: getFullImageUrl(song.imageUrl) }}
-                      style={styles.searchResultImage}
-                    />
-                    <View style={styles.searchResultInfo}>
-                      <Text 
-                        style={[styles.searchResultTitle, isCurrentSong && { color: themeColors.primary }]} 
-                        numberOfLines={1}
-                      >
-                        {song.title}
-                      </Text>
-                      <Text style={styles.searchResultArtist} numberOfLines={1}>
-                        {song.artist}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.searchResultPlayBtn, { backgroundColor: themeColors.primary }]}
-                      onPress={() => handleSearchResultPlay(song, index)}
-                    >
-                      <Icon
-                        name={isThisSongPlaying ? 'pause' : 'play'}
-                        size={16}
-                        color="#fff"
-                        style={!isThisSongPlaying && { marginLeft: 2 }}
-                      />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </View>
-        ) : (
-          <>
-            {/* Liked Songs Section */}
-            <SectionGrid
-              title="Liked Songs"
-              songs={likedSongs}
-              isLoading={likedSongsLoading || !likedSongsInitialized}
-              viewAllPath="/likes"
-            />
+        <>
+          {/* Login Banner for unauthenticated users */}
+          {!isAuthenticated && (
+            <LoginBanner themeColors={themeColors} onLogin={handleLogin} />
+          )}
 
-      {/* Featured Section */}
-      <FeaturedSection />
+          {/* Liked Songs Section */}
+          <SectionGrid
+            title="Liked Songs"
+            songs={likedSongs}
+            isLoading={likedSongsLoading || !likedSongsInitialized}
+            viewAllPath="/likes"
+          />
 
-      {/* Made For You Section */}
-      <SectionGrid
-        title="Made For You"
-        songs={madeForYouSongs}
-        isLoading={isLoading}
-      />
+          {/* Featured Section */}
+          <FeaturedSection />
 
-      {/* Trending Section */}
-      <SectionGrid
-        title="Trending"
-        songs={trendingSongs}
-        isLoading={isLoading}
-      />
+          {/* Made For You Section */}
+          <SectionGrid
+            title="Made For You"
+            songs={madeForYouSongs}
+            isLoading={isLoading}
+          />
 
-      {/* Bottom spacing for playback controls */}
-      <View style={{ height: DIMS.playbackHeight + SPACING.xl }} />
-          </>
-        )}
-    </ScrollView>
+          {/* Trending Section */}
+          <SectionGrid
+            title="Trending"
+            songs={trendingSongs}
+            isLoading={isLoading}
+          />
+
+          {/* Bottom spacing for playback controls */}
+          <View style={{ height: DIMS.playbackHeight + SPACING.xl }} />
+        </>
+      </ScrollView>
     </View>
   );
 };
@@ -743,141 +767,6 @@ const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.background,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.zinc800,
-  },
-  topBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  topBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logo: {
-    width: 32,
-    height: 32,
-  },
-  logoText: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginLeft: SPACING.sm,
-  },
-  topBarIcon: {
-    padding: 8,
-  },
-  profileButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 18,
-  },
-  profilePlaceholder: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 18,
-    backgroundColor: COLORS.zinc800,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.zinc800,
-    marginHorizontal: SPACING.md,
-    marginVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.lg,
-    marginTop: SPACING.md
-  },
-  searchIcon: {
-    marginRight: SPACING.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: FONT_SIZES.md,
-    color: COLORS.textPrimary,
-    padding: 4,
-  },
-  // Search Results styles
-  searchResultsContainer: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-  },
-  searchResultsTitle: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.md,
-  },
-  noResultsContainer: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl,
-  },
-  noResultsText: {
-    fontSize: FONT_SIZES.md,
-    color: COLORS.textPrimary,
-    marginTop: SPACING.md,
-  },
-  noResultsSubtext: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textMuted,
-    marginTop: SPACING.xs,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.xs,
-  },
-  searchResultItemActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  searchResultImage: {
-    width: 48,
-    height: 48,
-    borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: COLORS.zinc800,
-  },
-  searchResultInfo: {
-    flex: 1,
-    marginLeft: SPACING.md,
-    marginRight: SPACING.md,
-  },
-  searchResultTitle: {
-    fontSize: FONT_SIZES.md,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  searchResultArtist: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  searchResultPlayBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   container: {
     flex: 1,
@@ -1329,5 +1218,55 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.zinc800,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Login Banner Styles
+  loginBanner: {
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.zinc700,
+  },
+  loginBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  loginBannerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.zinc800,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loginBannerText: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  loginBannerTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  loginBannerSubtitle: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  loginBannerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    gap: SPACING.xs,
+  },
+  loginBannerButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

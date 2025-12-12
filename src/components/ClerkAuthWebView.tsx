@@ -14,11 +14,8 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 // Clerk configuration
 const CLERK_PUBLISHABLE_KEY = 'pk_test_Z2FtZS1idW5ueS05Ny5jbGVyay5hY2NvdW50cy5kZXYk';
 
-// Extract domain from publishable key
 const getClerkDomain = (): string => {
   try {
-    // pk_test_Z2FtZS1idW5ueS05Ny5jbGVyay5hY2NvdW50cy5kZXYk
-    // The base64 part decodes to: game-bunny-97.clerk.accounts.dev
     const base64Part = CLERK_PUBLISHABLE_KEY.split('_')[2];
     // Remove trailing $ if present
     const cleanBase64 = base64Part.replace(/\$+$/, '');
@@ -75,25 +72,17 @@ export const ClerkAuthWebView: React.FC<ClerkAuthWebViewProps> = ({
 
   const handleNavigationStateChange = (navState: WebViewNavigation) => {
     const { url } = navState;
-    console.log('WebView URL:', url);
 
-    // Check for successful authentication
-    // Clerk redirects to the callback URL with session info
     if (url.includes('auth-callback') || url.includes('__clerk_status=verified')) {
-      // Extract user info from the session
       handleAuthSuccess(url);
     }
 
     // Handle OAuth completion
     if (url.includes('sso-callback') || url.includes('oauth_callback')) {
-      // OAuth callback - wait for redirect
-      console.log('OAuth callback detected');
     }
   };
 
   const handleAuthSuccess = async (url: string) => {
-    // For now, extract basic info and let the main app handle full sync
-    // In production, you'd parse the JWT or session token from the URL
     onSuccess({
       userId: 'clerk_' + Date.now(),
       name: 'Google User',
@@ -151,7 +140,6 @@ export const ClerkAuthWebView: React.FC<ClerkAuthWebViewProps> = ({
         onClose();
       }
     } catch (e) {
-      console.log('WebView message parse error:', e);
     }
   };
 

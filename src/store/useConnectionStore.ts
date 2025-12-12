@@ -37,7 +37,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
                 timeout: 10000, // 10 second timeout
             });
 
-            console.log('✅ Backend connected');
             set({
                 isConnected: true,
                 isConnecting: false,
@@ -53,7 +52,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
                     ? 'Server is starting up...'
                     : 'Connecting to server...';
 
-            console.log(`⏳ Connection attempt ${retryCount}/${state.maxRetries}: ${errorMessage}`);
 
             set({
                 isConnected: false,

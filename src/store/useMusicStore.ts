@@ -238,7 +238,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     updateSong: async (id: string, formData: FormData) => {
         set({ isLoading: true, error: null });
         try {
-            const { data } = await axiosInstance.put(`/admin/songs/${id}`, formData);
+            const { data } = await axiosInstance.put(`/admin/songs/${id}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
             const updatedSong = data.song as Song;
             const likedSet = new Set(get().likedSongs.map((song) => song._id));
             const songWithLike = {

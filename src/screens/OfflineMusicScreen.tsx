@@ -8,7 +8,6 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +16,7 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useOfflineMusicStore, formatFileSize, LocalSong } from '../store/useOfflineMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { CustomDialog, useDialog } from '../components/CustomDialog';
 
 type TabType = 'downloaded' | 'device';
 
@@ -85,6 +85,7 @@ const SongItem = ({
 export const OfflineMusicScreen = () => {
   const navigation = useNavigation();
   const { colors: themeColors } = useThemeStore();
+  const { dialogState, hideDialog, showConfirm } = useDialog();
   const {
     downloadedSongs,
     deviceSongs,
@@ -135,42 +136,29 @@ export const OfflineMusicScreen = () => {
       return;
     }
     
-    console.log('OfflineMusicScreen: Playing song', song.title, 'at index', songIndex);
-    
-    // Use playAlbum to set queue and play atomically
     const { playAlbum } = usePlayerStore.getState();
     playAlbum(queueSongs as any, songIndex);
   };
 
   const handleDeleteSong = (song: LocalSong) => {
-    Alert.alert(
+    showConfirm(
       'Delete Download',
       `Remove "${song.title}" from downloads?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteSong(song._id),
-        },
-      ]
+      () => deleteSong(song._id),
+      'Delete',
+      true
     );
   };
 
   const handleClearAll = () => {
     if (downloadedSongs.length === 0) return;
     
-    Alert.alert(
+    showConfirm(
       'Clear All Downloads',
       `This will delete all ${downloadedSongs.length} downloaded songs. Are you sure?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: clearAllDownloads,
-        },
-      ]
+      clearAllDownloads,
+      'Clear All',
+      true
     );
   };
 
@@ -321,6 +309,16 @@ export const OfflineMusicScreen = () => {
           }
         />
       )}
+
+      {/* Custom Dialog */}
+      <CustomDialog
+        visible={dialogState.visible}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        buttons={dialogState.buttons}
+        onClose={hideDialog}
+      />
     </SafeAreaView>
   );
 };

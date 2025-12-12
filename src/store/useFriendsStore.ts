@@ -89,7 +89,6 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
                 });
             }
         } catch (error) {
-            console.log('Could not fetch last seen data:', error);
         }
     },
 
@@ -116,7 +115,6 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
             set({ lastMessages: lastMessagesMap });
         } catch (error) {
-            console.log('Could not fetch last messages:', error);
         }
     },
 
@@ -137,12 +135,10 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
         socketInstance.emit('user_connected', userId);
 
         socketInstance.on('connect', () => {
-            console.log('✅ Socket connected');
             set({ isConnected: true });
         });
 
         socketInstance.on('disconnect', () => {
-            console.log('❌ Socket disconnected');
             set({ isConnected: false });
         });
 
@@ -246,6 +242,29 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
         socketInstance.on('error', (error: string) => {
             console.error('Socket error:', error);
         });
+
+        // Listen for broadcast notifications from admin
+        socketInstance.on('broadcast_notification', (notification: {
+            id: string;
+            title?: string;
+            message: string;
+            imageUrl?: string;
+            link?: string;
+            createdAt: string;
+        }) => {
+
+            // Vibrate the device
+            Vibration.vibrate([0, 250, 100, 250]);
+
+            // Trigger local notification if callback is set
+            if (notificationCallback) {
+                notificationCallback(
+                    notification.title || 'DRS Music',
+                    notification.message,
+                    notification
+                );
+            }
+        });
     },
 
     disconnectSocket: () => {
@@ -271,9 +290,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
     fetchMessages: async (userId: string) => {
         set({ isLoading: true, error: null });
         try {
-            console.log('📨 Fetching messages for user:', userId);
             const response = await axiosInstance.get(`/users/messages/${userId}`);
-            console.log('📨 Messages received:', response.data?.length || 0);
             set({ messages: response.data || [] });
         } catch (error: any) {
             console.error('❌ Error fetching messages:', error);
@@ -289,9 +306,6 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
     sendMessage: (receiverId: string, senderId: string, content: string) => {
         const socket = get().socket;
         const isConnected = get().isConnected;
-
-        console.log('📤 Sending message:', { receiverId, senderId, content: content.substring(0, 20) });
-        console.log('🔌 Socket status:', { socket: !!socket, isConnected });
 
         if (!socket || !isConnected) {
             console.error('❌ Cannot send message: Socket not connected');
@@ -325,7 +339,6 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
         // Send via socket
         socket.emit('send_message', { receiverId, senderId, content });
-        console.log('✅ Message sent via socket');
     },
 
     setChatScreenActive: (active: boolean) => {

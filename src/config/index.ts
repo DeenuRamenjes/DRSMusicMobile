@@ -62,7 +62,3 @@ export const getFullAudioUrl = (audioUrl?: string | null): string => {
     }
     return `${BACKEND_URL}${path}`;
 };
-
-// Log the current configuration
-console.log(`🌐 Environment: ${USE_PRODUCTION ? 'PRODUCTION' : 'DEVELOPMENT'}`);
-console.log(`🌐 Backend URL: ${BACKEND_URL}`);

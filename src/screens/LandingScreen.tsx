@@ -6,7 +6,6 @@ import {
   Dimensions,
   ActivityIndicator,
   StatusBar,
-  Alert,
   Pressable,
   Modal,
 } from 'react-native';
@@ -17,6 +16,7 @@ import { WebView } from 'react-native-webview';
 import { COLORS, SPACING } from '../constants/theme';
 import { useAuthStore } from '../store/useAuthStore';
 import axiosInstance from '../api/axios';
+import { CustomDialog, useDialog } from '../components/CustomDialog';
 
 const { height } = Dimensions.get('window');
 
@@ -27,13 +27,13 @@ const CLERK_FRONTEND_API = 'https://game-bunny-97.accounts.dev';
 export const LandingScreen = () => {
   const navigation = useNavigation();
   const { login } = useAuthStore();
+  const { dialogState, hideDialog, showError } = useDialog();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showWebView, setShowWebView] = useState(false);
   const [webViewUrl, setWebViewUrl] = useState('');
 
   // Handle Google Sign-In via Clerk WebView
   const handleGoogleSignIn = () => {
-    console.log('Opening Clerk sign-in...');
     // Use Clerk's sign-in page - it has the Google option
     setWebViewUrl(`${CLERK_FRONTEND_API}/sign-in`);
     setShowWebView(true);
@@ -42,11 +42,9 @@ export const LandingScreen = () => {
   // Handle WebView navigation changes
   const handleWebViewNavigationChange = (navState: any) => {
     const { url, loading } = navState;
-    console.log('WebView navigating to:', url);
 
     // Check for successful OAuth callback
     if (url.includes('oauth_callback') || url.includes('sso-callback')) {
-      console.log('OAuth callback detected');
     }
 
     // Check if we're on the Clerk dashboard (successful login)
@@ -89,7 +87,6 @@ export const LandingScreen = () => {
   const handleWebViewMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      console.log('WebView message:', data);
       
       if (data.type === 'auth_success' && data.user) {
         const { id, firstName, lastName, email, imageUrl } = data.user;
@@ -125,9 +122,6 @@ export const LandingScreen = () => {
         throw new Error('Invalid response from auth server');
       }
 
-      console.log('✅ Mobile auth successful:', user.email);
-
-      // Login with the real token from backend
       login(
         {
           id: user.id || user._id,
@@ -148,7 +142,7 @@ export const LandingScreen = () => {
       );
     } catch (error: any) {
       console.error('Auth error:', error);
-      Alert.alert('Error', 'Failed to complete sign in');
+      showError('Error', 'Failed to complete sign in');
     } finally {
       setIsSigningIn(false);
     }
@@ -172,9 +166,6 @@ export const LandingScreen = () => {
         throw new Error('Invalid response from auth server');
       }
 
-      console.log('✅ Mobile auth successful:', user.email);
-
-      // Login with the real token from backend
       login(
         {
           id: user.id,
@@ -195,7 +186,7 @@ export const LandingScreen = () => {
       );
     } catch (error: any) {
       console.error('Mobile auth error:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to login');
+      showError('Error', error.response?.data?.message || 'Failed to login');
     } finally {
       setIsSigningIn(false);
     }
@@ -301,12 +292,22 @@ export const LandingScreen = () => {
             onError={(syntheticEvent) => {
               const { nativeEvent } = syntheticEvent;
               console.error('WebView error:', nativeEvent);
-              Alert.alert('Error', 'Failed to load sign-in page. Please try demo login.');
               setShowWebView(false);
+              showError('Error', 'Failed to load sign-in page. Please try demo login.');
             }}
           />
         </SafeAreaView>
       </Modal>
+
+      {/* Custom Dialog */}
+      <CustomDialog
+        visible={dialogState.visible}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        buttons={dialogState.buttons}
+        onClose={hideDialog}
+      />
     </View>
   );
 };

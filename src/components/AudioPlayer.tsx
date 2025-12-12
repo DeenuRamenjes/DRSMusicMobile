@@ -53,32 +53,26 @@ export const AudioPlayer = () => {
             
             // Register event handlers - use getState() to get fresh references
             MusicControl.on(Command.play, () => {
-                console.log('[MusicControl] Play command received');
                 usePlayerStore.getState().setIsPlaying(true);
             });
             
             MusicControl.on(Command.pause, () => {
-                console.log('[MusicControl] Pause command received');
                 usePlayerStore.getState().setIsPlaying(false);
             });
             
             MusicControl.on(Command.stop, () => {
-                console.log('[MusicControl] Stop command received');
                 usePlayerStore.getState().setIsPlaying(false);
             });
             
             MusicControl.on(Command.nextTrack, () => {
-                console.log('[MusicControl] Next track command received');
                 usePlayerStore.getState().playNext();
             });
             
             MusicControl.on(Command.previousTrack, () => {
-                console.log('[MusicControl] Previous track command received');
                 usePlayerStore.getState().playPrevious();
             });
             
             MusicControl.on(Command.seek, (pos: number) => {
-                console.log('[MusicControl] Seek command received, position:', pos);
                 if (videoRef.current) {
                     videoRef.current.seek(pos);
                     const store = usePlayerStore.getState();
@@ -87,19 +81,15 @@ export const AudioPlayer = () => {
             });
 
             MusicControl.on(Command.closeNotification, () => {
-                console.log('[MusicControl] Close notification command received');
                 usePlayerStore.getState().setIsPlaying(false);
             });
 
-            // Handle togglePlayPause - Android often sends this instead of separate play/pause
             MusicControl.on(Command.togglePlayPause, () => {
-                console.log('[MusicControl] Toggle play/pause command received');
                 const store = usePlayerStore.getState();
                 store.setIsPlaying(!store.isPlaying);
             });
             
             isInitializedRef.current = true;
-            console.log('[MusicControl] Initialized successfully');
         } catch (error) {
             console.error('[MusicControl] Init error:', error);
         }
@@ -118,7 +108,6 @@ export const AudioPlayer = () => {
         if (!currentSong || !isInitializedRef.current) return;
         
         try {
-            console.log('[MusicControl] Updating now playing:', currentSong.title);
             MusicControl.setNowPlaying({
                 title: currentSong.title || 'Unknown Title',
                 artist: currentSong.artist || 'Unknown Artist',
@@ -138,14 +127,8 @@ export const AudioPlayer = () => {
         }
     }, [currentSong?._id, currentSong?.title]);
 
-    // Update playback state in notification
     useEffect(() => {
-        console.log('[AudioPlayer] isPlaying effect triggered:', {
-            isPlaying,
-            hasVideoRef: !!videoRef.current,
-            audioUrl: audioUrl?.substring(0, 60),
-        });
-        
+
         if (!isInitializedRef.current) return;
         
         try {
@@ -156,12 +139,10 @@ export const AudioPlayer = () => {
         } catch (error) {
             console.error('[MusicControl] Update playback error:', error);
         }
-    }, [isPlaying]); // Only trigger on isPlaying changes
+    }, [isPlaying]); 
 
-    // Handle seek requests from store
     useEffect(() => {
         const unsubscribe = usePlayerStore.subscribe((state, prevState) => {
-            // If currentTime changed significantly (more than 1s difference), it's likely a seek
             const timeDiff = Math.abs(state.currentTime - prevState.currentTime);
             if (timeDiff > 1 && videoRef.current) {
                 seekTimeRef.current = state.currentTime;
@@ -172,7 +153,6 @@ export const AudioPlayer = () => {
         return () => unsubscribe();
     }, []);
 
-    // Periodically update notification progress
     useEffect(() => {
         if (!isInitializedRef.current || !isPlaying) return;
         
@@ -186,11 +166,10 @@ export const AudioPlayer = () => {
     }, [Math.floor(currentTime / 5)]);
 
     const handleProgress = useCallback((data: OnProgressData) => {
-        // Don't update if we're actively seeking
         if (seekTimeRef.current !== null) {
             const diff = Math.abs(data.currentTime - seekTimeRef.current);
             if (diff < 0.5) {
-                seekTimeRef.current = null; // Seek complete
+                seekTimeRef.current = null; 
             }
             return;
         }
@@ -198,7 +177,6 @@ export const AudioPlayer = () => {
     }, [updateProgress]);
 
     const handleLoad = useCallback((data: OnLoadData) => {
-        console.log('[AudioPlayer] Audio loaded, duration:', data.duration);
         updateProgress(0, data.duration);
         
         // Update duration in notification
@@ -219,7 +197,6 @@ export const AudioPlayer = () => {
     }, [updateProgress, currentSong]);
 
     const handleEnd = useCallback(() => {
-        console.log('[AudioPlayer] Playback ended');
         onPlaybackEnd();
     }, [onPlaybackEnd]);
 
@@ -231,7 +208,6 @@ export const AudioPlayer = () => {
 
     const handleBuffer = useCallback((data: { isBuffering: boolean }) => {
         if (data.isBuffering) {
-            console.log('[AudioPlayer] Buffering...');
             if (isInitializedRef.current) {
                 try {
                     MusicControl.updatePlayback({
@@ -245,16 +221,11 @@ export const AudioPlayer = () => {
     }, []);
 
     const handleReadyForDisplay = useCallback(() => {
-        // Audio is ready
-        console.log('[AudioPlayer] Ready for display');
     }, []);
 
-    // Debug: Log when audioUrl changes
     useEffect(() => {
-        console.log('[AudioPlayer] audioUrl changed to:', audioUrl);
     }, [audioUrl]);
 
-    // No audio URL, don't render anything
     if (!audioUrl) {
         return null;
     }

@@ -80,11 +80,8 @@ const requestStoragePermission = async (): Promise<boolean> => {
 
     try {
         const sdkVersion = Platform.Version;
-        console.log('Android SDK Version:', sdkVersion);
 
         if (typeof sdkVersion === 'number' && sdkVersion >= 33) {
-            // Android 13+ - need READ_MEDIA_AUDIO
-            console.log('Requesting READ_MEDIA_AUDIO permission (Android 13+)');
 
             // First check if already granted
             const hasPermission = await PermissionsAndroid.check(
@@ -92,7 +89,6 @@ const requestStoragePermission = async (): Promise<boolean> => {
             );
 
             if (hasPermission) {
-                console.log('Audio permission already granted');
                 return true;
             }
 
@@ -107,14 +103,10 @@ const requestStoragePermission = async (): Promise<boolean> => {
                 }
             );
 
-            console.log('Permission result:', result);
-
             // Return true even for NEVER_ASK_AGAIN - we'll try to scan anyway
             return result === PermissionsAndroid.RESULTS.GRANTED ||
                 result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN;
         } else {
-            // Android 12 and below - need READ_EXTERNAL_STORAGE
-            console.log('Requesting READ_EXTERNAL_STORAGE permission (Android <= 12)');
 
             // First check if already granted
             const hasPermission = await PermissionsAndroid.check(
@@ -122,7 +114,6 @@ const requestStoragePermission = async (): Promise<boolean> => {
             );
 
             if (hasPermission) {
-                console.log('Storage permission already granted');
                 return true;
             }
 
@@ -136,8 +127,6 @@ const requestStoragePermission = async (): Promise<boolean> => {
                     buttonPositive: 'Allow',
                 }
             );
-
-            console.log('Permission result:', result);
 
             return result === PermissionsAndroid.RESULTS.GRANTED ||
                 result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN;
@@ -180,15 +169,11 @@ const scanDirectory = async (path: string, songs: LocalSong[]): Promise<void> =>
                         isDownloaded: false,
                         fileSize: item.size,
                     };
-
-                    console.log(`Found audio file: ${item.name}`);
                     songs.push(song);
                 }
             }
         }
     } catch (error: any) {
-        // Log but don't throw for permission errors
-        console.log(`Scan error for ${path}: ${error.message || error}`);
     }
 };
 
@@ -224,10 +209,8 @@ const scanDirectoryFlat = async (path: string, songs: LocalSong[]): Promise<void
             }
         }
         if (foundCount > 0) {
-            console.log(`Found ${foundCount} audio files in ${path}`);
         }
     } catch (error: any) {
-        console.log(`Flat scan error for ${path}: ${error.message || error}`);
     }
 };
 
@@ -289,18 +272,14 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
         set({ isScanning: true, error: null });
 
         try {
-            const hasPermission = await requestStoragePermission();
-            console.log('Permission granted:', hasPermission);
-
-            console.log('\n====== Starting File System Scan ======');
 
             const songs: LocalSong[] = [];
             const externalPath = RNFS.ExternalStorageDirectoryPath || '/storage/emulated/0';
-            console.log('External storage path:', externalPath);
 
             // Comprehensive list of directories to scan
             const musicDirs = [
                 `${externalPath}/Music`,
+                `${externalPath}/DRS-Music`,
                 `${externalPath}/Download`,
                 `${externalPath}/Downloads`,
                 `${externalPath}/DCIM`,
@@ -321,17 +300,14 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
                     const exists = await RNFS.exists(dir);
                     if (exists) {
                         existingDirs++;
-                        console.log(`✓ Scanning: ${dir}`);
                         const beforeCount = songs.length;
                         await scanDirectory(dir, songs);
                         const found = songs.length - beforeCount;
                         if (found > 0) {
-                            console.log(`  Found ${found} files`);
                         }
                         scannedCount++;
                     }
                 } catch (e: any) {
-                    console.log(`✗ Cannot access: ${dir} - ${e.message || e}`);
                 }
             }
 
@@ -340,17 +316,10 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
                 const appDownloadDir = `${RNFS.DocumentDirectoryPath}/downloads`;
                 const exists = await RNFS.exists(appDownloadDir);
                 if (exists) {
-                    console.log(`✓ Scanning app downloads: ${appDownloadDir}`);
                     await scanDirectory(appDownloadDir, songs);
                 }
             } catch (e) {
-                console.log('App download dir not accessible');
             }
-
-            console.log(`\n====== Scan Complete ======`);
-            console.log(`Scanned ${scannedCount}/${existingDirs} directories`);
-            console.log(`Found ${songs.length} audio files`);
-
             if (songs.length === 0) {
                 // Show helpful message with link to settings
                 const errorMsg = Platform.OS === 'android'
@@ -393,7 +362,6 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
 
         // Check if already downloaded
         if (get().isDownloaded(song._id)) {
-            console.log('Song already downloaded:', song.title);
             return true;
         }
 
@@ -406,7 +374,6 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
         }));
 
         try {
-            console.log('Downloading:', audioUrl, 'to', filePath);
 
             const downloadResult = await RNFS.downloadFile({
                 fromUrl: audioUrl,
@@ -455,8 +422,6 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
 
                 // Calculate storage
                 await get().calculateStorageUsed();
-
-                console.log('Download completed:', song.title);
                 return true;
             } else {
                 throw new Error(`Download failed with status ${downloadResult.statusCode}`);
