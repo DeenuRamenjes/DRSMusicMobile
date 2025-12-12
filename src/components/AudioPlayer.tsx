@@ -3,8 +3,10 @@ import { AppState, AppStateStatus } from 'react-native';
 import TrackPlayer, {
     Capability,
     State,
+    Event,
     usePlaybackState,
     useProgress,
+    useTrackPlayerEvents,
     RepeatMode,
     AppKilledPlaybackBehavior,
 } from 'react-native-track-player';
@@ -86,6 +88,7 @@ export const AudioPlayer = () => {
         currentSong,
         isPlaying,
         updateProgress,
+        setIsPlaying,
     } = usePlayerStore();
 
     // Get playback state from TrackPlayer
@@ -119,6 +122,45 @@ export const AudioPlayer = () => {
         };
     }, []);
 
+    // Track last time we triggered playNext to prevent double triggering
+    const lastPlayNextTimeRef = useRef<number>(0);
+
+    // CRITICAL: Listen for playback events to handle track ending
+    useTrackPlayerEvents(
+        [Event.PlaybackState, Event.PlaybackQueueEnded],
+        async (event) => {
+            console.log('[TrackPlayer] Event received:', event.type);
+
+            if (event.type === Event.PlaybackState) {
+                const state = (event as any).state;
+                console.log('[TrackPlayer] Playback state:', state);
+                
+                // Sync play state to store
+                if (state === State.Playing) {
+                    usePlayerStore.getState().setIsPlaying(true);
+                } else if (state === State.Paused || state === State.Stopped) {
+                    usePlayerStore.getState().setIsPlaying(false);
+                }
+                
+                // NOTE: We handle playNext only in PlaybackQueueEnded to avoid double triggering
+            }
+
+            // When queue ends (no more tracks to play) - this is the ONLY place we call playNext
+            if (event.type === Event.PlaybackQueueEnded) {
+                // Debounce: Only trigger if more than 500ms since last trigger
+                const now = Date.now();
+                if (now - lastPlayNextTimeRef.current < 500) {
+                    console.log('[TrackPlayer] Queue ended - skipping (debounced)');
+                    return;
+                }
+                lastPlayNextTimeRef.current = now;
+                
+                console.log('[TrackPlayer] Queue ended - triggering playNext');
+                usePlayerStore.getState().playNext();
+            }
+        }
+    );
+
     // Sync progress to store
     useEffect(() => {
         if (progress.duration > 0) {
@@ -149,53 +191,25 @@ export const AudioPlayer = () => {
 
             lastSongIdRef.current = currentSong._id;
             isLoadingTrackRef.current = true;
-            console.log('[TrackPlayer] Loading new track:', currentSong.title);
+            console.log('[TrackPlayer] Loading new track:', currentSong.title, 'URL:', audioUrl.substring(0, 60));
 
             try {
-                // Get current queue
-                const queue = await TrackPlayer.getQueue();
-                
-                // If there's a track playing, just skip to end and add new track
-                if (queue.length > 0) {
-                    // Remove all tracks from queue
-                    await TrackPlayer.removeUpcomingTracks();
-                    
-                    // Add new track
-                    await TrackPlayer.add({
-                        id: currentSong._id,
-                        url: audioUrl,
-                        title: currentSong.title || 'Unknown Title',
-                        artist: currentSong.artist || 'Unknown Artist',
-                        artwork: currentSong.imageUrl 
-                            ? getFullImageUrl(currentSong.imageUrl) 
-                            : undefined,
-                        duration: currentSong.duration || 0,
-                    });
-                    
-                    // Skip to the new track
-                    await TrackPlayer.skipToNext();
-                    
-                    // Remove the old track (now at position 0)
-                    try {
-                        await TrackPlayer.remove(0);
-                    } catch (e) {
-                        // Ignore if removal fails
-                    }
-                } else {
-                    // No tracks in queue, just add and play
-                    await TrackPlayer.add({
-                        id: currentSong._id,
-                        url: audioUrl,
-                        title: currentSong.title || 'Unknown Title',
-                        artist: currentSong.artist || 'Unknown Artist',
-                        artwork: currentSong.imageUrl 
-                            ? getFullImageUrl(currentSong.imageUrl) 
-                            : undefined,
-                        duration: currentSong.duration || 0,
-                    });
-                }
+                const newTrack = {
+                    id: currentSong._id,
+                    url: audioUrl,
+                    title: currentSong.title || 'Unknown Title',
+                    artist: currentSong.artist || 'Unknown Artist',
+                    artwork: currentSong.imageUrl 
+                        ? getFullImageUrl(currentSong.imageUrl) 
+                        : undefined,
+                    duration: currentSong.duration || 0,
+                };
 
-                // Ensure repeat is off
+                // Use load() instead of reset() + add() to prevent notification from restarting
+                // load() smoothly transitions to the new track
+                await TrackPlayer.load(newTrack);
+
+                // Ensure repeat is OFF - we handle next track manually
                 await TrackPlayer.setRepeatMode(RepeatMode.Off);
 
                 // Play the track
@@ -203,6 +217,25 @@ export const AudioPlayer = () => {
                 console.log('[TrackPlayer] Track loaded and playing');
             } catch (error) {
                 console.error('[TrackPlayer] Error loading track:', error);
+                
+                // Fallback to reset approach if load fails
+                try {
+                    await TrackPlayer.reset();
+                    await TrackPlayer.add({
+                        id: currentSong._id,
+                        url: audioUrl,
+                        title: currentSong.title || 'Unknown Title',
+                        artist: currentSong.artist || 'Unknown Artist',
+                        artwork: currentSong.imageUrl 
+                            ? getFullImageUrl(currentSong.imageUrl) 
+                            : undefined,
+                        duration: currentSong.duration || 0,
+                    });
+                    await TrackPlayer.setRepeatMode(RepeatMode.Off);
+                    await TrackPlayer.play();
+                } catch (fallbackError) {
+                    console.error('[TrackPlayer] Fallback also failed:', fallbackError);
+                }
             } finally {
                 isLoadingTrackRef.current = false;
             }
