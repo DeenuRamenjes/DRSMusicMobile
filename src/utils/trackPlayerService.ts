@@ -1,4 +1,4 @@
-import TrackPlayer, { Event, State } from 'react-native-track-player';
+import TrackPlayer, { Event } from 'react-native-track-player';
 import { usePlayerStore } from '../store/usePlayerStore';
 
 // Debounce tracking for playNext to prevent double triggering
@@ -10,11 +10,9 @@ let lastPlayNextTime = 0;
  * Handles remote control events from notification and lock screen
  */
 export default async function playbackService(): Promise<void> {
-    console.log('[TrackPlayerService] Starting playback service');
 
     // Handle remote play event (from notification or lock screen)
     TrackPlayer.addEventListener(Event.RemotePlay, async () => {
-        console.log('[TrackPlayerService] Remote play pressed');
         try {
             await TrackPlayer.play();
             usePlayerStore.getState().setIsPlaying(true);
@@ -25,7 +23,6 @@ export default async function playbackService(): Promise<void> {
 
     // Handle remote pause event
     TrackPlayer.addEventListener(Event.RemotePause, async () => {
-        console.log('[TrackPlayerService] Remote pause pressed');
         try {
             await TrackPlayer.pause();
             usePlayerStore.getState().setIsPlaying(false);
@@ -36,7 +33,6 @@ export default async function playbackService(): Promise<void> {
 
     // Handle remote stop event
     TrackPlayer.addEventListener(Event.RemoteStop, async () => {
-        console.log('[TrackPlayerService] Remote stop pressed');
         try {
             await TrackPlayer.stop();
             usePlayerStore.getState().setIsPlaying(false);
@@ -47,7 +43,6 @@ export default async function playbackService(): Promise<void> {
 
     // Handle remote next event (from notification controls)
     TrackPlayer.addEventListener(Event.RemoteNext, async () => {
-        console.log('[TrackPlayerService] Remote next pressed');
         try {
             usePlayerStore.getState().playNext();
         } catch (error) {
@@ -57,7 +52,6 @@ export default async function playbackService(): Promise<void> {
 
     // Handle remote previous event (from notification controls)
     TrackPlayer.addEventListener(Event.RemotePrevious, async () => {
-        console.log('[TrackPlayerService] Remote previous pressed');
         try {
             usePlayerStore.getState().playPrevious();
         } catch (error) {
@@ -67,7 +61,6 @@ export default async function playbackService(): Promise<void> {
 
     // Handle remote seek event (from notification seekbar)
     TrackPlayer.addEventListener(Event.RemoteSeek, async (event) => {
-        console.log('[TrackPlayerService] Remote seek to:', event.position);
         try {
             await TrackPlayer.seekTo(event.position);
             const store = usePlayerStore.getState();
@@ -82,25 +75,18 @@ export default async function playbackService(): Promise<void> {
         // Debounce: Only trigger if more than 500ms since last trigger
         const now = Date.now();
         if (now - lastPlayNextTime < 500) {
-            console.log('[TrackPlayerService] Queue ended - skipping (debounced)');
             return;
         }
         lastPlayNextTime = now;
 
-        console.log('[TrackPlayerService] Queue ended - triggering playNext');
         usePlayerStore.getState().playNext();
     });
 
-    // Handle playback state changes
+    // Handle playback state changes - LOGGING ONLY
+    // We do NOT sync state to store here - the store is the source of truth
+    // Syncing here causes audio to pause during navigation/re-renders
     TrackPlayer.addEventListener(Event.PlaybackState, async (event) => {
-        console.log('[TrackPlayerService] Playback state:', event.state);
-
-        // Sync play state to store
-        if (event.state === State.Playing) {
-            usePlayerStore.getState().setIsPlaying(true);
-        } else if (event.state === State.Paused || event.state === State.Stopped) {
-            usePlayerStore.getState().setIsPlaying(false);
-        }
+        // NOTE: Intentionally NOT syncing to store - causes issues during navigation
     });
 
     // Handle playback error
@@ -110,7 +96,6 @@ export default async function playbackService(): Promise<void> {
 
     // Remote duck (lower volume when another app plays audio)
     TrackPlayer.addEventListener(Event.RemoteDuck, async (event) => {
-        console.log('[TrackPlayerService] Remote duck:', event);
         try {
             if (event.paused) {
                 await TrackPlayer.pause();
@@ -123,6 +108,4 @@ export default async function playbackService(): Promise<void> {
             console.error('[TrackPlayerService] Error handling duck:', error);
         }
     });
-
-    console.log('[TrackPlayerService] Playback service registered successfully');
 }

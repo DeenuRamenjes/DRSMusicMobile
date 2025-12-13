@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,14 +8,18 @@ import {
   Animated,
   Easing,
   Image,
+  Modal,
+  Pressable,
 } from 'react-native';
-import { COLORS, SPACING, FONT_SIZES } from '../constants/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useConnectionStore } from '../store/useConnectionStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
+import { useBackendStore, BACKEND_SERVERS, USE_DEPLOYMENT } from '../config';
+import { CustomDialog, useDialog } from './CustomDialog';
 import Icon from 'react-native-vector-icons/Feather';
 
-const DRSLogo = require('../assets/DRS.png');
+const DRSLogo = require('../assets/DRS-Logo.png');
 
 interface ConnectionScreenProps {
   onRetry?: () => void;
@@ -32,10 +36,17 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
   } = useConnectionStore();
   const { colors: themeColors } = useThemeStore();
   const { downloadedSongs, setOfflineMode } = useOfflineMusicStore();
+  const { selectedServerId, setSelectedServer, loadSelectedServer } = useBackendStore();
+  const { dialogState, hideDialog, showError, showConfirm } = useDialog();
+  const [serverMenuVisible, setServerMenuVisible] = useState(false);
   
   // Pulsing animation for the icon
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
   const spinAnim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    loadSelectedServer();
+  }, []);
 
   useEffect(() => {
     // Pulse animation
@@ -80,6 +91,36 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
   const handleOfflineMode = () => {
     setOfflineMode(true);
     onOfflinePress?.();
+  };
+
+  const handleServerSwitch = async (serverId: string) => {
+    if (serverId === selectedServerId) {
+      setServerMenuVisible(false);
+      return;
+    }
+    
+    setServerMenuVisible(false);
+    
+    const server = BACKEND_SERVERS.find(s => s.id === serverId);
+    showConfirm(
+      'Switch Server',
+      `Switch to ${server?.name}? The app will try to connect to the new server.`,
+      async () => {
+        await setSelectedServer(serverId);
+        // Retry connection with new server
+        setTimeout(() => {
+          checkConnection();
+          onRetry?.();
+        }, 500);
+      },
+      'Switch',
+      false
+    );
+  };
+
+  const getSelectedServerName = () => {
+    const server = BACKEND_SERVERS.find(s => s.id === selectedServerId);
+    return server?.name || 'Select Server';
   };
 
   const isMaxRetriesReached = retryCount >= maxRetries;
@@ -164,6 +205,20 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
             }
           </Text>
         </TouchableOpacity>
+
+        {/* Server Selection - Only show when using deployment */}
+        {USE_DEPLOYMENT && (
+          <TouchableOpacity 
+            style={styles.serverButton}
+            onPress={() => setServerMenuVisible(true)}
+          >
+            <Icon name="server" size={16} color={COLORS.textMuted} />
+            <Text style={styles.serverButtonText}>
+              Server: {getSelectedServerName()}
+            </Text>
+            <Icon name="chevron-down" size={14} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Footer */}
@@ -171,6 +226,57 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
         <Text style={styles.footerText}>DRS Music</Text>
         <Text style={styles.footerSubtext}>Your music, anywhere</Text>
       </View>
+
+      {/* Server Selection Modal */}
+      {USE_DEPLOYMENT && (
+        <Modal
+          visible={serverMenuVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setServerMenuVisible(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setServerMenuVisible(false)}>
+            <View style={styles.serverMenuContainer}>
+              <Text style={styles.serverMenuTitle}>Select Server</Text>
+              <Text style={styles.serverMenuSubtitle}>
+                Choose a server to connect to
+              </Text>
+              {BACKEND_SERVERS.map((server) => {
+                const isSelected = selectedServerId === server.id;
+                return (
+                  <TouchableOpacity
+                    key={server.id}
+                    style={[styles.serverOption, isSelected && styles.serverOptionSelected]}
+                    onPress={() => handleServerSwitch(server.id)}
+                  >
+                    <View style={styles.serverOptionInfo}>
+                      <Text style={[styles.serverOptionName, isSelected && { color: themeColors.primary }]}>
+                        {server.name}
+                      </Text>
+                      {server.description && (
+                        <Text style={styles.serverOptionDesc}>{server.description}</Text>
+                      )}
+                    </View>
+                    {isSelected && (
+                      <Icon name="check" size={20} color={themeColors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* Custom Dialog */}
+      <CustomDialog
+        visible={dialogState.visible}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        buttons={dialogState.buttons}
+        onClose={hideDialog}
+      />
     </View>
   );
 };
@@ -276,6 +382,71 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.textDim,
     marginTop: 4,
+  },
+  // Server menu styles
+  serverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  serverButtonText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  serverMenuContainer: {
+    backgroundColor: COLORS.zinc900,
+    borderRadius: BORDER_RADIUS.lg,
+    width: '100%',
+    maxWidth: 320,
+    borderWidth: 1,
+    borderColor: COLORS.zinc700,
+    padding: SPACING.lg,
+  },
+  serverMenuTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  serverMenuSubtitle: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.lg,
+  },
+  serverOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.xs,
+  },
+  serverOptionSelected: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  },
+  serverOptionInfo: {
+    flex: 1,
+  },
+  serverOptionName: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  serverOptionDesc: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
 });
 

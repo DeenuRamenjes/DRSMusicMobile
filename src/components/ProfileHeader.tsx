@@ -9,9 +9,10 @@ import { useMusicStore } from '../store/useMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useNavigation, CommonActions } from '@react-navigation/native';
-import { getFullImageUrl } from '../config';
+import { getFullImageUrl, useBackendStore, BACKEND_SERVERS, USE_DEPLOYMENT } from '../config';
+import { CustomDialog, useDialog } from './CustomDialog';
 
-const DRSLogo = require('../assets/DRS.png');
+const DRSLogo = require('../assets/DRS-Logo.png');
 
 const ProfileHeader = () => {
   const { user, logout, isAuthenticated } = useAuthStore();
@@ -21,9 +22,17 @@ const ProfileHeader = () => {
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [serverMenuVisible, setServerMenuVisible] = useState(false);
   const { searchSongs } = useMusicStore();
   const { colors: themeColors } = useThemeStore();
   const { currentSong, isPlaying, playSong } = usePlayerStore();
+  const { selectedServerId, setSelectedServer, loadSelectedServer } = useBackendStore();
+  const { dialogState, hideDialog, showError, showConfirm } = useDialog();
+
+  // Load server preference on mount
+  useEffect(() => {
+    loadSelectedServer();
+  }, []);
 
   const handleLogout = () => {
     setMenuVisible(false);
@@ -44,6 +53,33 @@ const ProfileHeader = () => {
   const handleNavigateToSettings = () => {
     setMenuVisible(false);
     (navigation as any).navigate('Settings');
+  };
+
+  const handleServerSwitch = async (serverId: string) => {
+    if (serverId === selectedServerId) {
+      setServerMenuVisible(false);
+      return;
+    }
+    
+    setServerMenuVisible(false);
+    setMenuVisible(false);
+    
+    const server = BACKEND_SERVERS.find(s => s.id === serverId);
+    showConfirm(
+      'Switch Server',
+      `Switch to ${server?.name}? This requires restarting the app.`,
+      async () => {
+        await setSelectedServer(serverId);
+        showError('Server Changed', 'Please restart the app for changes to take effect.');
+      },
+      'Switch',
+      false
+    );
+  };
+
+  const getSelectedServerName = () => {
+    const server = BACKEND_SERVERS.find(s => s.id === selectedServerId);
+    return server?.name || 'Select Server';
   };
 
   useEffect(() => {
@@ -247,6 +283,21 @@ const ProfileHeader = () => {
                 <FeatherIcon name="chevron-right" size={18} color={COLORS.textMuted} />
               </TouchableOpacity>
 
+              {/* Server Selection - Only show when USE_DEPLOYMENT is true */}
+              {USE_DEPLOYMENT && (
+                <TouchableOpacity 
+                  style={styles.menuItem}
+                  onPress={() => setServerMenuVisible(true)}
+                >
+                  <FeatherIcon name="server" size={20} color={COLORS.textPrimary} />
+                  <View style={styles.serverMenuItem}>
+                    <Text style={styles.menuItemText}>Server</Text>
+                    <Text style={styles.serverNameText}>{getSelectedServerName()}</Text>
+                  </View>
+                  <FeatherIcon name="chevron-right" size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              )}
+
               <View style={styles.menuDivider} />
 
               <TouchableOpacity 
@@ -260,6 +311,54 @@ const ProfileHeader = () => {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Server Selection Modal */}
+      {USE_DEPLOYMENT && (
+        <Modal
+          visible={serverMenuVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setServerMenuVisible(false)}
+        >
+          <Pressable style={styles.menuOverlay} onPress={() => setServerMenuVisible(false)}>
+            <View style={styles.serverMenuContainer}>
+              <Text style={styles.serverMenuTitle}>Select Server</Text>
+              {BACKEND_SERVERS.map((server) => {
+                const isSelected = selectedServerId === server.id;
+                return (
+                  <TouchableOpacity
+                    key={server.id}
+                    style={[styles.serverOption, isSelected && styles.serverOptionSelected]}
+                    onPress={() => handleServerSwitch(server.id)}
+                  >
+                    <View style={styles.serverOptionInfo}>
+                      <Text style={[styles.serverOptionName, isSelected && { color: themeColors.primary }]}>
+                        {server.name}
+                      </Text>
+                      {server.description && (
+                        <Text style={styles.serverOptionDesc}>{server.description}</Text>
+                      )}
+                    </View>
+                    {isSelected && (
+                      <FeatherIcon name="check" size={20} color={themeColors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* Custom Dialog */}
+      <CustomDialog
+        visible={dialogState.visible}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        buttons={dialogState.buttons}
+        onClose={hideDialog}
+      />
     </View>
   );
 };
@@ -480,6 +579,55 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.zinc700,
     marginVertical: SPACING.xs,
+  },
+  // Server menu styles
+  serverMenuItem: {
+    flex: 1,
+    marginLeft: SPACING.sm,
+  },
+  serverNameText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  serverMenuContainer: {
+    backgroundColor: COLORS.zinc900,
+    borderRadius: BORDER_RADIUS.lg,
+    minWidth: 280,
+    borderWidth: 1,
+    borderColor: COLORS.zinc700,
+    padding: SPACING.md,
+  },
+  serverMenuTitle: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.md,
+    textAlign: 'center',
+  },
+  serverOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.xs,
+  },
+  serverOptionSelected: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  },
+  serverOptionInfo: {
+    flex: 1,
+  },
+  serverOptionName: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  serverOptionDesc: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
 });
 

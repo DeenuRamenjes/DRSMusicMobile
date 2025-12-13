@@ -3,7 +3,7 @@ import axiosInstance from '../api/axios';
 import { User, Message } from '../types';
 import { io, Socket } from 'socket.io-client';
 import { Vibration } from 'react-native';
-import { SOCKET_URL } from '../config';
+import { getSocketUrl } from '../config';
 
 // Notification callback - to be set by notification service
 let notificationCallback: ((title: string, body: string, data?: any) => void) | null = null;
@@ -123,7 +123,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             return;
         }
 
-        socketInstance = io(SOCKET_URL, {
+        socketInstance = io(getSocketUrl(), {
             autoConnect: false,
             withCredentials: true,
             auth: { userId },

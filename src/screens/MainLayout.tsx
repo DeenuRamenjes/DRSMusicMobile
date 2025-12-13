@@ -36,7 +36,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useNavigation } from '@react-navigation/native';
 import { getFullImageUrl } from '../config';
 
-const DRSLogo = require('../assets/DRS.png');
+const DRSLogo = require('../assets/DRS-Logo.png');
 
 const Tab = createBottomTabNavigator();
 

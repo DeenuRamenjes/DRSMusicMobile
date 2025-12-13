@@ -1,19 +1,20 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../config';
+import { getApiUrl } from '../config';
 
+// Create axios instance - baseURL will be set dynamically in request interceptor
 export const axiosInstance = axios.create({
-    baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
     timeout: 15000,
 });
 
-// Request interceptor
+// Request interceptor - dynamically sets baseURL and adds auth token
 axiosInstance.interceptors.request.use(
     async (config) => {
-        // console.log(`📡 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+        // Dynamically get the current API URL (allows runtime switching)
+        config.baseURL = getApiUrl();
 
         try {
             const token = await AsyncStorage.getItem('authToken');
@@ -31,7 +32,6 @@ axiosInstance.interceptors.request.use(
 // Response interceptor
 axiosInstance.interceptors.response.use(
     (response) => {
-        // console.log(`✅ ${response.config.url} - ${response.status}`);
         return response;
     },
     (error) => {

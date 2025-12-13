@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,7 +26,7 @@ import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { Song } from '../types';
-import { getFullImageUrl } from '../config';
+import { getFullImageUrl, useBackendStore } from '../config';
 import ProfileHeader from '../components/ProfileHeader';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -587,7 +587,6 @@ export const HomeScreen = () => {
     fetchMadeForYouSongs,
     fetchTrendingSongs,
     fetchLikedSongs,
-    isLoading,
     madeForYouSongs,
     featuredSongs,
     trendingSongs,
@@ -602,6 +601,10 @@ export const HomeScreen = () => {
   const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
   const { colors: themeColors } = useThemeStore();
   const { isAuthenticated } = useAuthStore();
+  const { selectedServerId } = useBackendStore();
+
+  // Track previous server to detect changes
+  const prevServerRef = useRef(selectedServerId);
 
   const handleLogin = () => {
     navigation.dispatch(
@@ -612,9 +615,38 @@ export const HomeScreen = () => {
     );
   };
 
+  // Local loading state for initial load - prevents flicker from parallel fetches
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
+
+  // Refetch when server changes or connection is restored
   useEffect(() => {
     // Skip fetching if in offline mode
-    if (isOfflineMode) return;
+    if (isOfflineMode) {
+      setInitialLoading(false);
+      return;
+    }
+
+    // Check if server changed
+    const serverChanged = prevServerRef.current !== selectedServerId;
+    if (serverChanged) {
+      prevServerRef.current = selectedServerId;
+      setInitialLoading(true); // Reset loading when server changes
+      setHasFetchedOnce(false); // Allow refetch
+    }
+
+    // Don't refetch if we already fetched for this server (unless server changed)
+    if (hasFetchedOnce && !serverChanged) {
+      setInitialLoading(false);
+      return;
+    }
+
+    // Timeout to ensure we don't get stuck in loading state
+    const loadingTimeout = setTimeout(() => {
+      if (initialLoading) {
+        setInitialLoading(false);
+      }
+    }, 15000); // 15 second timeout
 
     const fetchSongs = async () => {
       try {
@@ -624,12 +656,19 @@ export const HomeScreen = () => {
           fetchMadeForYouSongs(),
           fetchTrendingSongs(),
         ]);
+        setHasFetchedOnce(true);
       } catch (error) {
         console.error('Error fetching songs:', error);
+      } finally {
+        clearTimeout(loadingTimeout);
+        setInitialLoading(false);
       }
     };
+    
     fetchSongs();
-  }, [isOfflineMode]);
+
+    return () => clearTimeout(loadingTimeout);
+  }, [isOfflineMode, selectedServerId]);
 
   useEffect(() => {
     // In offline mode, use downloaded songs for queue
@@ -638,7 +677,7 @@ export const HomeScreen = () => {
       return;
     }
 
-    if (!isLoading && !isOfflineMode) {
+    if (!initialLoading && !isOfflineMode) {
       const allSongs = [
         ...madeForYouSongs,
         ...featuredSongs,
@@ -652,7 +691,7 @@ export const HomeScreen = () => {
       }
     }
   }, [
-    isLoading,
+    initialLoading,
     madeForYouSongs,
     featuredSongs,
     trendingSongs,
@@ -694,7 +733,7 @@ export const HomeScreen = () => {
     );
   }
 
-  if (isLoading && !refreshing && !isOfflineMode) {
+  if (initialLoading && !refreshing && !isOfflineMode) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={themeColors.primary} />
@@ -745,14 +784,14 @@ export const HomeScreen = () => {
           <SectionGrid
             title="Made For You"
             songs={madeForYouSongs}
-            isLoading={isLoading}
+            isLoading={initialLoading && madeForYouSongs.length === 0}
           />
 
           {/* Trending Section */}
           <SectionGrid
             title="Trending"
             songs={trendingSongs}
-            isLoading={isLoading}
+            isLoading={initialLoading && trendingSongs.length === 0}
           />
 
           {/* Bottom spacing for playback controls */}

@@ -2,9 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import TrackPlayer, {
     Capability,
-    State,
     Event,
-    usePlaybackState,
     useProgress,
     useTrackPlayerEvents,
     RepeatMode,
@@ -29,7 +27,6 @@ export const setupTrackPlayer = async (): Promise<boolean> => {
         try {
             await TrackPlayer.getActiveTrackIndex();
             isTrackPlayerInitialized = true;
-            console.log('[TrackPlayer] Already initialized');
             return true;
         } catch {
             // Not initialized, continue with setup
@@ -66,7 +63,6 @@ export const setupTrackPlayer = async (): Promise<boolean> => {
         await TrackPlayer.setRepeatMode(RepeatMode.Off);
 
         isTrackPlayerInitialized = true;
-        console.log('[TrackPlayer] Setup complete');
         return true;
     } catch (error) {
         console.error('[TrackPlayer] Setup error:', error);
@@ -91,8 +87,7 @@ export const AudioPlayer = () => {
         setIsPlaying,
     } = usePlayerStore();
 
-    // Get playback state from TrackPlayer
-    const playbackState = usePlaybackState();
+    // Get progress from TrackPlayer
     const progress = useProgress(500);
 
     // Initialize TrackPlayer on mount
@@ -103,7 +98,6 @@ export const AudioPlayer = () => {
             const success = await setupTrackPlayer();
             if (success) {
                 isInitializedRef.current = true;
-                console.log('[AudioPlayer] TrackPlayer initialized');
             }
         };
 
@@ -113,7 +107,6 @@ export const AudioPlayer = () => {
     // Handle app state changes
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-            console.log('[AudioPlayer] App state changed:', appStateRef.current, '->', nextAppState);
             appStateRef.current = nextAppState;
         });
 
@@ -126,36 +119,19 @@ export const AudioPlayer = () => {
     const lastPlayNextTimeRef = useRef<number>(0);
 
     // CRITICAL: Listen for playback events to handle track ending
+    // NOTE: We only listen for queue ended - play/pause state is controlled by the store
     useTrackPlayerEvents(
-        [Event.PlaybackState, Event.PlaybackQueueEnded],
+        [Event.PlaybackQueueEnded],
         async (event) => {
-            console.log('[TrackPlayer] Event received:', event.type);
-
-            if (event.type === Event.PlaybackState) {
-                const state = (event as any).state;
-                console.log('[TrackPlayer] Playback state:', state);
-                
-                // Sync play state to store
-                if (state === State.Playing) {
-                    usePlayerStore.getState().setIsPlaying(true);
-                } else if (state === State.Paused || state === State.Stopped) {
-                    usePlayerStore.getState().setIsPlaying(false);
-                }
-                
-                // NOTE: We handle playNext only in PlaybackQueueEnded to avoid double triggering
-            }
-
-            // When queue ends (no more tracks to play) - this is the ONLY place we call playNext
+            // When queue ends (no more tracks to play) - trigger next song
             if (event.type === Event.PlaybackQueueEnded) {
                 // Debounce: Only trigger if more than 500ms since last trigger
                 const now = Date.now();
                 if (now - lastPlayNextTimeRef.current < 500) {
-                    console.log('[TrackPlayer] Queue ended - skipping (debounced)');
                     return;
                 }
                 lastPlayNextTimeRef.current = now;
                 
-                console.log('[TrackPlayer] Queue ended - triggering playNext');
                 usePlayerStore.getState().playNext();
             }
         }
@@ -173,25 +149,14 @@ export const AudioPlayer = () => {
         const loadTrack = async () => {
             if (!currentSong || !audioUrl || !isInitializedRef.current) return;
 
-            // Avoid reloading the same track
+            // Avoid reloading the same track - the sync effect handles play/pause state
             if (lastSongIdRef.current === currentSong._id) {
-                // Just control playback for same song
-                try {
-                    const state = playbackState.state;
-                    if (isPlaying && state !== State.Playing) {
-                        await TrackPlayer.play();
-                    } else if (!isPlaying && state === State.Playing) {
-                        await TrackPlayer.pause();
-                    }
-                } catch (error) {
-                    // Ignore
-                }
+                // Same track - no need to reload, play/pause is handled by the sync effect
                 return;
             }
 
             lastSongIdRef.current = currentSong._id;
             isLoadingTrackRef.current = true;
-            console.log('[TrackPlayer] Loading new track:', currentSong.title, 'URL:', audioUrl.substring(0, 60));
 
             try {
                 const newTrack = {
@@ -214,7 +179,6 @@ export const AudioPlayer = () => {
 
                 // Play the track
                 await TrackPlayer.play();
-                console.log('[TrackPlayer] Track loaded and playing');
             } catch (error) {
                 console.error('[TrackPlayer] Error loading track:', error);
                 
@@ -245,16 +209,16 @@ export const AudioPlayer = () => {
     }, [currentSong?._id, audioUrl]);
 
     // Sync play/pause state from store to TrackPlayer
+    // This ONLY triggers when isPlaying changes in the store (from user action or notification)
     useEffect(() => {
+        // Skip sync if not initialized or loading a new track
+        if (!isInitializedRef.current || isLoadingTrackRef.current) return;
+        
         const syncPlayState = async () => {
-            if (!isInitializedRef.current || isLoadingTrackRef.current) return;
-
             try {
-                const currentState = playbackState.state;
-                
-                if (isPlaying && currentState !== State.Playing && currentState !== State.Buffering) {
+                if (isPlaying) {
                     await TrackPlayer.play();
-                } else if (!isPlaying && currentState === State.Playing) {
+                } else {
                     await TrackPlayer.pause();
                 }
             } catch (error) {
@@ -263,7 +227,7 @@ export const AudioPlayer = () => {
         };
 
         syncPlayState();
-    }, [isPlaying, playbackState.state]);
+    }, [isPlaying]); // ONLY react to isPlaying changes
 
     // Listen for seek requests from store
     useEffect(() => {

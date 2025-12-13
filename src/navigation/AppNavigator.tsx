@@ -46,9 +46,14 @@ export const AppNavigator = () => {
       setInitialCheckDone(true);
       setConnectionFailed(!connected);
       
-      // If connected, check auth
+      // If connected, check auth with a timeout
       if (connected) {
-        checkAuth();
+        const authTimeout = setTimeout(() => {
+          // If auth takes too long, force set isLoading to false
+          useAuthStore.getState().setIsLoading(false);
+        }, 50000); // 50 second timeout
+        
+        checkAuth().finally(() => clearTimeout(authTimeout));
       }
     };
     
@@ -79,7 +84,13 @@ export const AppNavigator = () => {
             checkConnection().then((connected) => {
               if (connected) {
                 setConnectionFailed(false);
-                checkAuth();
+                // Check auth with a timeout to prevent infinite loading
+                const authTimeout = setTimeout(() => {
+                  // If auth takes too long, force set isLoading to false
+                  useAuthStore.getState().setIsLoading(false);
+                }, 20000); // 20 second timeout for auth
+                
+                checkAuth().finally(() => clearTimeout(authTimeout));
               }
             });
           }}
@@ -99,7 +110,13 @@ export const AppNavigator = () => {
             checkConnection().then((connected) => {
               if (connected) {
                 setConnectionFailed(false);
-                checkAuth();
+                // Check auth with a timeout to prevent infinite loading
+                const authTimeout = setTimeout(() => {
+                  // If auth takes too long, force set isLoading to false
+                  useAuthStore.getState().setIsLoading(false);
+                }, 20000); // 20 second timeout for auth
+                
+                checkAuth().finally(() => clearTimeout(authTimeout));
               }
             });
           }}
@@ -136,9 +153,20 @@ export const AppNavigator = () => {
         <Stack.Screen 
           name="Landing" 
           component={LandingScreen}
-          options={{ animationTypeForReplace: 'pop' }}
+          options={{ 
+            animationTypeForReplace: 'pop',
+            // Disable swipe back gesture on landing screen to prevent accidental exit
+            gestureEnabled: false,
+          }}
         />
-        <Stack.Screen name="MainLayout" component={MainLayout} />
+        <Stack.Screen 
+          name="MainLayout" 
+          component={MainLayout}
+          options={{
+            // Disable swipe back gesture on main screen to prevent accidental exit
+            gestureEnabled: false,
+          }}
+        />
         <Stack.Screen 
           name="SongDetail" 
           component={SongDetailScreen}

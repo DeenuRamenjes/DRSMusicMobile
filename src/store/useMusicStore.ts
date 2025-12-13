@@ -143,50 +143,41 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     },
 
     // Fetch featured songs - GET /api/songs/featured
+    // Note: Does not set isLoading to avoid race conditions when called in parallel
     fetchFeaturedSongs: async () => {
-        set({ isLoading: true, error: null });
         try {
             const { data } = await axiosInstance.get<Song[]>('/songs/featured');
             const likedSet = new Set(get().likedSongs.map((song) => song._id));
-            set({ featuredSongs: applyLikesToSongs(data, likedSet), isLoading: false });
+            set({ featuredSongs: applyLikesToSongs(data, likedSet) });
         } catch (error: any) {
             console.error('Error fetching featured songs:', error);
-            set({
-                error: error.response?.data?.message || 'Failed to fetch featured songs',
-                isLoading: false
-            });
+            // Don't set global error for individual section failures
         }
     },
 
     // Fetch made for you songs - GET /api/songs/made-for-you
+    // Note: Does not set isLoading to avoid race conditions when called in parallel
     fetchMadeForYouSongs: async () => {
-        set({ isLoading: true, error: null });
         try {
             const { data } = await axiosInstance.get<Song[]>('/songs/made-for-you');
             const likedSet = new Set(get().likedSongs.map((song) => song._id));
-            set({ madeForYouSongs: applyLikesToSongs(data, likedSet), isLoading: false });
+            set({ madeForYouSongs: applyLikesToSongs(data, likedSet) });
         } catch (error: any) {
             console.error('Error fetching made for you songs:', error);
-            set({
-                error: error.response?.data?.message || 'Failed to fetch made for you songs',
-                isLoading: false
-            });
+            // Don't set global error for individual section failures
         }
     },
 
     // Fetch trending songs - GET /api/songs/trending
+    // Note: Does not set isLoading to avoid race conditions when called in parallel
     fetchTrendingSongs: async () => {
-        set({ isLoading: true, error: null });
         try {
             const { data } = await axiosInstance.get<Song[]>('/songs/trending');
             const likedSet = new Set(get().likedSongs.map((song) => song._id));
-            set({ trendingSongs: applyLikesToSongs(data, likedSet), isLoading: false });
+            set({ trendingSongs: applyLikesToSongs(data, likedSet) });
         } catch (error: any) {
             console.error('Error fetching trending songs:', error);
-            set({
-                error: error.response?.data?.message || 'Failed to fetch trending songs',
-                isLoading: false
-            });
+            // Don't set global error for individual section failures
         }
     },
 

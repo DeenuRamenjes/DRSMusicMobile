@@ -16,6 +16,7 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS, ACCENT_COLORS }
 import { useAuthStore } from '../store/useAuthStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { useBackendStore, BACKEND_SERVERS, USE_DEPLOYMENT } from '../config';
 import axiosInstance from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
 
@@ -178,6 +179,13 @@ export const SettingsScreen = () => {
     colors: themeColors,
   } = useThemeStore();
   
+  // Backend server selection
+  const { 
+    selectedServerId, 
+    setSelectedServer, 
+    loadSelectedServer 
+  } = useBackendStore();
+  
   const [settings, setSettings] = useState({
     emailNotifications: true,
     pushNotifications: false,
@@ -203,6 +211,28 @@ export const SettingsScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Handle server switching
+  const handleServerSwitch = async (serverId: string) => {
+    if (serverId === selectedServerId) return;
+    
+    const server = BACKEND_SERVERS.find(s => s.id === serverId);
+    showConfirm(
+      'Switch Server',
+      `Switch to ${server?.name}? This requires restarting the app.`,
+      async () => {
+        await setSelectedServer(serverId);
+        showError('Server Changed', 'Please restart the app for changes to take effect.');
+      },
+      'Switch',
+      false
+    );
+  };
+
+  // Load backend server preference on mount
+  useEffect(() => {
+    loadSelectedServer();
+  }, []);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -538,6 +568,41 @@ export const SettingsScreen = () => {
           </SettingItem>
         </Section>
 
+        {/* SERVER - Only show when using deployment */}
+        {USE_DEPLOYMENT && (
+          <>
+            <SectionHeader icon="🌐" title="SERVER" />
+            <Section>
+              {BACKEND_SERVERS.map((server, index) => {
+                const isSelected = selectedServerId === server.id;
+                const isLast = index === BACKEND_SERVERS.length - 1;
+                return (
+                  <TouchableOpacity
+                    key={server.id}
+                    style={[
+                      styles.settingItem, 
+                      !isLast && styles.settingItemBorder
+                    ]}
+                    onPress={() => handleServerSwitch(server.id)}
+                  >
+                    <View style={styles.serverInfo}>
+                      <Text style={styles.settingLabel}>{server.name}</Text>
+                      {server.description && (
+                        <Text style={styles.serverDescription}>{server.description}</Text>
+                      )}
+                    </View>
+                    {isSelected ? (
+                      <Text style={[styles.checkmark, { color: themeColors.primary }]}>✓</Text>
+                    ) : (
+                      <Text style={styles.actionIcon}>○</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </Section>
+          </>
+        )}
+
         {/* ACCOUNT */}
         <SectionHeader icon="👤" title="ACCOUNT" />
         <Section>
@@ -835,5 +900,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textDim,
     marginTop: SPACING.xxl,
+  },
+
+  // Server Switching
+  serverInfo: {
+    flex: 1,
+  },
+  serverDescription: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  checkmark: {
+    fontSize: 20,
+    fontWeight: '600',
   },
 });

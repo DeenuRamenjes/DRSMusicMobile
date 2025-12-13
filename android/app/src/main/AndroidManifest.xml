@@ -39,12 +39,11 @@
         </intent-filter>
       </activity>
       
-      <!-- React Native Track Player Service - override library manifest -->
+      <!-- React Native Track Player Service - using our custom service -->
       <service
-        android:name="com.doublesymmetry.trackplayer.service.MusicService"
+        android:name=".MusicService"
         android:exported="false"
-        android:foregroundServiceType="mediaPlayback"
-        tools:replace="android:exported">
+        android:foregroundServiceType="mediaPlayback">
         <intent-filter>
             <action android:name="android.media.browse.MediaBrowserService" />
         </intent-filter>
