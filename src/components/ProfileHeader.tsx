@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   // Profile Menu Styles
   menuOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    // backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
     paddingTop: 80,

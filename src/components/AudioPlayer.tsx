@@ -9,6 +9,7 @@ import TrackPlayer, {
     AppKilledPlaybackBehavior,
 } from 'react-native-track-player';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useFriendsStore } from '../store/useFriendsStore';
 import { getFullAudioUrl, getFullImageUrl } from '../config';
 
 // Track if TrackPlayer is initialized
@@ -179,6 +180,12 @@ export const AudioPlayer = () => {
 
                 // Play the track
                 await TrackPlayer.play();
+
+                // Broadcast activity to friends (real-time "now playing")
+                useFriendsStore.getState().updateActivity(
+                    currentSong.title || 'Unknown Title',
+                    currentSong.artist || 'Unknown Artist'
+                );
             } catch (error) {
                 console.error('[TrackPlayer] Error loading track:', error);
                 
@@ -218,8 +225,17 @@ export const AudioPlayer = () => {
             try {
                 if (isPlaying) {
                     await TrackPlayer.play();
+                    // Update activity when resuming playback
+                    if (currentSong) {
+                        useFriendsStore.getState().updateActivity(
+                            currentSong.title || 'Unknown Title',
+                            currentSong.artist || 'Unknown Artist'
+                        );
+                    }
                 } else {
                     await TrackPlayer.pause();
+                    // Clear activity when pausing (shows as "Idle")
+                    useFriendsStore.getState().clearActivity();
                 }
             } catch (error) {
                 console.error('[TrackPlayer] Play state sync error:', error);

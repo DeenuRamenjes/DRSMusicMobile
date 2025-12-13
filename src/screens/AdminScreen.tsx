@@ -38,6 +38,7 @@ export const AdminScreen = () => {
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [notificationTitle, setNotificationTitle] = useState('');
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationImageUrl, setNotificationImageUrl] = useState('');
   const [isSendingNotification, setIsSendingNotification] = useState(false);
 
   // Fetch stats on mount
@@ -69,11 +70,13 @@ export const AdminScreen = () => {
       const response = await axiosInstance.post('/admin/notifications', {
         title: notificationTitle.trim() || 'DRS Music',
         message: notificationMessage.trim(),
+        imageUrl: notificationImageUrl.trim() || undefined,
       });
       
       const connectedCount = response.data?.connectedClients || 0;
       setNotificationTitle('');
       setNotificationMessage('');
+      setNotificationImageUrl('');
       setIsNotificationModalOpen(false);
       showSuccess('Success', `Notification sent to ${connectedCount} connected user(s)!`);
     } catch (error: any) {
@@ -264,6 +267,17 @@ export const AdminScreen = () => {
               <Text style={styles.characterCount}>
                 {notificationMessage.length}/200 characters
               </Text>
+
+              <Text style={styles.inputLabel}>Image URL (Optional)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="https://example.com/image.jpg"
+                placeholderTextColor={COLORS.textMuted}
+                value={notificationImageUrl}
+                onChangeText={setNotificationImageUrl}
+                keyboardType="url"
+                autoCapitalize="none"
+              />
 
               <View style={styles.infoBox}>
                 <Icon name="info" size={16} color={themeColors.primary} />

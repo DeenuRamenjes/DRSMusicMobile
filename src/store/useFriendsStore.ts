@@ -4,6 +4,7 @@ import { User, Message } from '../types';
 import { io, Socket } from 'socket.io-client';
 import { Vibration } from 'react-native';
 import { getSocketUrl } from '../config';
+import { showBroadcastNotification, showMessageNotification } from '../services/NotificationService';
 
 // Notification callback - to be set by notification service
 let notificationCallback: ((title: string, body: string, data?: any) => void) | null = null;
@@ -34,6 +35,7 @@ interface FriendsState {
     initSocket: (userId: string) => void;
     disconnectSocket: () => void;
     updateActivity: (songTitle: string, artist: string) => void;
+    clearActivity: () => void;
     setSelectedUser: (user: User | null) => void;
     fetchMessages: (userId: string) => Promise<void>;
     sendMessage: (receiverId: string, senderId: string, content: string) => void;
@@ -43,6 +45,7 @@ interface FriendsState {
 
 // Create socket instance
 let socketInstance: Socket | null = null;
+let currentUserId: string | null = null;
 
 export const useFriendsStore = create<FriendsState>((set, get) => ({
     users: [],
@@ -123,6 +126,9 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             return;
         }
 
+        // Store userId for later use in updateActivity
+        currentUserId = userId;
+
         socketInstance = io(getSocketUrl(), {
             autoConnect: false,
             withCredentials: true,
@@ -136,6 +142,9 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
         socketInstance.on('connect', () => {
             set({ isConnected: true });
+
+            // Fetch users list to have sender names ready for notifications
+            get().fetchUsers();
         });
 
         socketInstance.on('disconnect', () => {
@@ -164,12 +173,29 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             });
         });
 
-        socketInstance.on('activity_updated', ({ userId: activityUserId, activity }: { userId: string; activity: string }) => {
-            set((state) => {
-                const newActivities = new Map(state.userActivities);
-                newActivities.set(activityUserId, activity);
-                return { userActivities: newActivities };
-            });
+        socketInstance.on('activity_updated', (data: any) => {
+
+            // Handle different possible data formats from server
+            let activityUserId: string | undefined;
+            let activity: string | undefined;
+
+            if (data && typeof data === 'object') {
+                // Try different property names the server might use
+                activityUserId = data.userId || data.user_id || data.clerkId || data.id;
+                activity = data.activity || data.status || data.message;
+            } else if (Array.isArray(data) && data.length >= 2) {
+                // Server might send as array [userId, activity]
+                activityUserId = data[0];
+                activity = data[1];
+            }
+
+            if (activityUserId && activity) {
+                set((state) => {
+                    const newActivities = new Map(state.userActivities);
+                    newActivities.set(activityUserId!, activity!);
+                    return { userActivities: newActivities };
+                });
+            }
         });
 
         socketInstance.on('last_seen_updated', (lastSeenData: [string, number][]) => {
@@ -182,7 +208,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             });
         });
 
-        socketInstance.on('receive_message', (message: Message) => {
+        socketInstance.on('receive_message', async (message: Message) => {
             const state = get();
             const { selectedUser, users, isChatScreenActive } = state;
             const isActiveConversation =
@@ -211,17 +237,37 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
                 // Vibrate for notification
                 Vibration.vibrate(100);
 
-                // Find sender info for notification
-                const sender = users.find((u) => u.clerkId === message.senderId);
-                const senderName = sender?.name || 'New Message';
+                // Find sender info for notification - check local cache first
+                let sender = users.find((u) => u.clerkId === message.senderId);
 
-                // Show notification callback if set
+                // If sender not in local users, refresh the users list
+                if (!sender && users.length === 0) {
+                    try {
+                        const response = await axiosInstance.get('/users');
+                        if (response.data && Array.isArray(response.data)) {
+                            set({ users: response.data });
+                            sender = response.data.find((u: User) => u.clerkId === message.senderId);
+                        }
+                    } catch (error) {
+                        console.error('[Socket] Could not fetch users:', error);
+                    }
+                }
+
+                const senderName = sender?.name || sender?.fullName || sender?.emailAddress?.split('@')[0] || 'Someone';
+
+                // Show in-app notification via callback
                 if (notificationCallback) {
                     notificationCallback(senderName, message.content, {
                         userId: message.senderId,
                         messageId: message._id,
                     });
                 }
+
+                // Also show system push notification
+                showMessageNotification(senderName, message.content, {
+                    userId: message.senderId,
+                    messageId: message._id,
+                });
             }
         });
 
@@ -229,12 +275,30 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             const currentUser = get().selectedUser;
             if (currentUser && (message.senderId === currentUser.clerkId || message.receiverId === currentUser.clerkId)) {
                 set((state) => {
-                    // Check if message already exists
+                    // Check if message already exists by _id
                     const messageExists = state.messages.some(m => m._id === message._id);
-                    if (!messageExists) {
-                        return { messages: [...state.messages, message] };
+                    if (messageExists) {
+                        return state;
                     }
-                    return state;
+
+                    // Find and replace a temp message with matching content (sent by current user)
+                    // Temp messages have IDs that are numeric strings (Date.now())
+                    const tempIndex = state.messages.findIndex(m =>
+                        m.senderId === message.senderId &&
+                        m.receiverId === message.receiverId &&
+                        m.content === message.content &&
+                        (m._id.startsWith('temp_') || /^\d+$/.test(m._id))
+                    );
+
+                    if (tempIndex !== -1) {
+                        // Replace temp message with real one from server
+                        const newMessages = [...state.messages];
+                        newMessages[tempIndex] = message;
+                        return { messages: newMessages };
+                    }
+
+                    // If no temp message found, add the new message
+                    return { messages: [...state.messages, message] };
                 });
             }
         });
@@ -256,14 +320,17 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             // Vibrate the device
             Vibration.vibrate([0, 250, 100, 250]);
 
-            // Trigger local notification if callback is set
-            if (notificationCallback) {
-                notificationCallback(
-                    notification.title || 'DRS Music',
-                    notification.message,
-                    notification
-                );
-            }
+            // Show push notification (real system notification)
+            showBroadcastNotification(
+                notification.title || 'DRS Music',
+                notification.message,
+                {
+                    id: notification.id,
+                    type: 'broadcast',
+                    imageUrl: notification.imageUrl,
+                    link: notification.link,
+                }
+            );
         });
     },
 
@@ -277,9 +344,22 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
     updateActivity: (songTitle: string, artist: string) => {
         const socket = get().socket;
-        if (socket && get().isConnected) {
-            const activity = `Playing ${songTitle} by ${artist}`;
-            socket.emit('update_activity', activity);
+        const activity = `Playing ${songTitle} by ${artist}`;
+        // Check socket.connected directly as isConnected state might be stale
+        if (socket && socket.connected && currentUserId) {
+            // Server expects { userId, activity } object
+            socket.emit('update_activity', { userId: currentUserId, activity });
+        } else {
+            console.error('[Socket] Failed to emit - socket not connected or userId missing');
+        }
+    },
+
+    clearActivity: () => {
+        const socket = get().socket;
+        // Check socket.connected directly as isConnected state might be stale
+        if (socket && socket.connected && currentUserId) {
+            // Server expects { userId, activity } object
+            socket.emit('update_activity', { userId: currentUserId, activity: 'Idle' });
         }
     },
 
@@ -382,4 +462,10 @@ export const formatRelativeTime = (timestamp: number): string => {
         const date = new Date(timestamp);
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
+};
+
+// Helper function to get total unread count
+export const getTotalUnreadCount = (): number => {
+    const unreadCounts = useFriendsStore.getState().unreadCounts;
+    return Object.values(unreadCounts).reduce((total, count) => total + count, 0);
 };

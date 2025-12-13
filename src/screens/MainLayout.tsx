@@ -33,6 +33,7 @@ import { useMusicStore } from '../store/useMusicStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { useFriendsStore } from '../store/useFriendsStore';
 import { useNavigation } from '@react-navigation/native';
 import { getFullImageUrl } from '../config';
 
@@ -56,6 +57,10 @@ const LeftSidebar = ({
 }) => {
   const { albums, fetchAlbums, isLoading } = useMusicStore();
   const { playAlbum } = usePlayerStore();
+  const { unreadCounts } = useFriendsStore();
+  
+  // Calculate total unread messages
+  const totalUnread = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
 
   // Only fetch albums on mount if not already loaded
   useEffect(() => {
@@ -122,7 +127,16 @@ const LeftSidebar = ({
           activeOpacity={0.7}
         >
           <View style={styles.navItemContent}>
-            <Icon name="message-circle" size={20} color={COLORS.textMuted} />
+            <View style={{ position: 'relative' }}>
+              <Icon name="message-circle" size={20} color={COLORS.textMuted} />
+              {totalUnread > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {totalUnread > 99 ? '99+' : totalUnread}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.navLabel}>Messages</Text>
           </View>
         </TouchableOpacity>
@@ -276,9 +290,29 @@ export const MainLayout = () => {
   const { user } = useAuthStore();
   const { isOfflineMode, setOfflineMode } = useOfflineMusicStore();
   const { colors: themeColors } = useThemeStore();
+  const { initSocket, disconnectSocket, unreadCounts } = useFriendsStore();
   const slideAnim = useState(new Animated.Value(-300))[0];
 
   const isAdmin = ADMIN_EMAILS.includes(user?.emailAddress ?? '');
+  
+  // Calculate total unread messages
+  const totalUnread = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
+
+  // Initialize socket when MainLayout mounts (user is logged in)
+  // This ensures users appear online whenever the app is active
+  useEffect(() => {
+    if (user && !isOfflineMode) {
+      const userId = user.clerkId || user.id;
+      if (userId) {
+        initSocket(userId);
+      }
+    }
+
+    // Disconnect socket when component unmounts
+    return () => {
+      disconnectSocket();
+    };
+  }, [user, isOfflineMode]);
 
   useEffect(() => {
     if (!isOfflineMode) {
@@ -365,13 +399,20 @@ export const MainLayout = () => {
       <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            {/* Menu Button */}
+            {/* Menu Button with unread badge */}
             <TouchableOpacity
               onPress={() => setIsSidebarOpen(true)}
               style={styles.menuButton}
               activeOpacity={0.7}
             >
               <Text style={styles.menuIcon}>☰</Text>
+              {totalUnread > 0 && (
+                <View style={styles.headerUnreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {totalUnread > 99 ? '99+' : totalUnread}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -852,5 +893,34 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     color: COLORS.textMuted,
     textAlign: 'center',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    backgroundColor: '#ef4444',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  unreadBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  headerUnreadBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
   },
 });

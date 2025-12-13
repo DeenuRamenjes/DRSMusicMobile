@@ -161,18 +161,16 @@ export const MessagesScreen = () => {
     lastMessages,
     fetchUsers,
     fetchLastMessages,
-    initSocket,
   } = useFriendsStore();
 
   const [refreshing, setRefreshing] = useState(false);
 
-  // Initialize socket and fetch users/messages
+  // Fetch users and messages on mount (socket is initialized in MainLayout)
   useEffect(() => {
     if (authUser) {
       fetchUsers().then(() => {
         fetchLastMessages();
       });
-      initSocket(authUser.clerkId || authUser.id);
     }
   }, [authUser]);
 
@@ -247,9 +245,6 @@ export const MessagesScreen = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerActionButton}>
-            <Icon name="search" size={20} color={COLORS.textPrimary} />
-          </TouchableOpacity>
           <TouchableOpacity style={styles.headerActionButton}>
             <Icon name="more-vertical" size={20} color={COLORS.textPrimary} />
           </TouchableOpacity>

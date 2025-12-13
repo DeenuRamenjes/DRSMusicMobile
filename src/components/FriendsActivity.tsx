@@ -33,8 +33,6 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
     userActivities,
     userLastSeen,
     fetchUsers,
-    initSocket,
-    disconnectSocket,
   } = useFriendsStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -46,11 +44,10 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
     (navigation as any).navigate('Chat', { user });
   };
 
-  // Initialize socket and fetch users
+  // Fetch users on mount (socket is initialized in MainLayout)
   useEffect(() => {
     if (authUser) {
       fetchUsers();
-      initSocket(authUser.clerkId || authUser.id);
     }
 
     // Refresh relative times every 30 seconds

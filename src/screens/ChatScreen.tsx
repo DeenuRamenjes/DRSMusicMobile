@@ -73,8 +73,10 @@ const MessageBubble = ({
           {avatarUrl ? (
             <Image source={{ uri: getFullImageUrl(avatarUrl) }} style={styles.messageAvatar} />
           ) : (
-            <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
-              <Text style={styles.avatarText}>?</Text>
+            <View 
+            // style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}
+            >
+              {/* <Text style={styles.avatarText}>?</Text> */}
             </View>
           )}
         </View>
@@ -247,9 +249,6 @@ export const ChatScreen = () => {
 
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerActionButton}>
-            <Icon name="phone" size={20} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerActionButton}>
             <Icon name="more-vertical" size={20} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
@@ -298,13 +297,8 @@ export const ChatScreen = () => {
               multiline
               maxLength={1000}
             />
-            <TouchableOpacity style={styles.attachButton}>
-              <Icon name="paperclip" size={22} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
-
           <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: themeColors.primary }]}
+            style={styles.attachButton}
             onPress={handleSend}
             disabled={!messageText.trim()}
           >
@@ -314,6 +308,18 @@ export const ChatScreen = () => {
               color={COLORS.textPrimary}
             />
           </TouchableOpacity>
+          </View>
+
+           <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: themeColors.primary }]}
+          >
+            <Icon
+              name="audio-off"
+              size={20}
+              color={COLORS.textPrimary}
+            />
+          </TouchableOpacity>
+
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -493,8 +499,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
+    paddingBottom: SPACING.sm,
     gap: SPACING.sm,
+    backgroundColor: COLORS.background,
   },
   inputWrapper: {
     flex: 1,
@@ -507,17 +515,21 @@ const styles = StyleSheet.create({
   },
   emojiButton: {
     padding: SPACING.sm,
+    paddingBottom: 12,
   },
   textInput: {
     flex: 1,
     fontSize: FONT_SIZES.md,
+    padding: SPACING.sm,
+    paddingBottom: 16,
     color: COLORS.textPrimary,
     maxHeight: 100,
-    paddingVertical: SPACING.md,
+    paddingVertical: Platform.OS === 'ios' ? SPACING.md : SPACING.sm,
     paddingHorizontal: SPACING.xs,
   },
   attachButton: {
     padding: SPACING.sm,
+    paddingBottom: 14,
   },
   sendButton: {
     width: 48,
@@ -525,6 +537,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 0,
   },
 });
 

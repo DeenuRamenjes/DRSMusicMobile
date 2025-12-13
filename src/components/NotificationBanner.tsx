@@ -6,12 +6,14 @@ import {
   Animated,
   TouchableOpacity,
   Dimensions,
+  AppState,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { setNotificationCallback } from '../store/useFriendsStore';
+import { createNotificationChannel, showMessageNotification, showGeneralNotification } from '../services/NotificationService';
 
 interface Notification {
   id: string;
@@ -27,6 +29,12 @@ export const NotificationBanner: React.FC = () => {
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const { colors: themeColors } = useThemeStore();
   const insets = useSafeAreaInsets();
+  const appStateRef = useRef(AppState.currentState);
+
+  // Initialize notification channels on mount
+  useEffect(() => {
+    createNotificationChannel();
+  }, []);
 
   // Set up the notification callback
   useEffect(() => {
@@ -37,11 +45,24 @@ export const NotificationBanner: React.FC = () => {
         message: body,
         timestamp: Date.now(),
       };
+      
+      // Show in-app banner
       setNotification(newNotification);
+      
+      // Also show system push notification if data indicates it's a message
+      if (data?.userId) {
+        showMessageNotification(title, body, data);
+      }
+    });
+
+    // Track app state
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      appStateRef.current = nextAppState;
     });
 
     return () => {
       setNotificationCallback(() => {});
+      subscription.remove();
     };
   }, []);
 
