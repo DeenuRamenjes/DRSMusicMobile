@@ -39,6 +39,14 @@ interface FriendsState {
     setSelectedUser: (user: User | null) => void;
     fetchMessages: (userId: string) => Promise<void>;
     sendMessage: (receiverId: string, senderId: string, content: string) => void;
+    sendSongMessage: (receiverId: string, senderId: string, song: {
+        songId: string;
+        title: string;
+        artist: string;
+        imageUrl: string;
+        audioUrl: string;
+        duration: number;
+    }) => void;
     setChatScreenActive: (active: boolean) => void;
     clearUnreadCount: (userId: string) => void;
 }
@@ -419,6 +427,50 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
         // Send via socket
         socket.emit('send_message', { receiverId, senderId, content });
+    },
+
+    sendSongMessage: (receiverId: string, senderId: string, song: {
+        songId: string;
+        title: string;
+        artist: string;
+        imageUrl: string;
+        audioUrl: string;
+        duration: number;
+    }) => {
+        const socket = get().socket;
+        const isConnected = get().isConnected;
+
+        if (!socket || !isConnected) {
+            console.error('❌ Cannot send song message: Socket not connected');
+            return;
+        }
+
+        const content = `🎵 Shared a song: ${song.title}`;
+
+        // Create a temporary message for immediate UI update
+        const tempMessage: Message = {
+            _id: Date.now().toString(),
+            senderId,
+            receiverId,
+            content,
+            createdAt: new Date().toISOString(),
+            messageType: 'song',
+            songData: song,
+        };
+
+        // Update UI immediately
+        set((state) => ({
+            messages: [...state.messages, tempMessage],
+        }));
+
+        // Send via socket with song data
+        socket.emit('send_message', {
+            receiverId,
+            senderId,
+            content,
+            messageType: 'song',
+            songData: song
+        });
     },
 
     setChatScreenActive: (active: boolean) => {

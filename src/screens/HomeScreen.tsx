@@ -336,16 +336,16 @@ const SectionGrid = ({
               {/* Active indicator */}
               {currentSong?._id === song._id && (
                 <View style={styles.activeIndicator}>
-                  <View style={[styles.bar, { height: 8 }]} />
-                  <View style={[styles.bar, { height: 12 }]} />
-                  <View style={[styles.bar, { height: 10 }]} />
+                  <View style={[styles.bar, { height: 8, backgroundColor: themeColors.primary }]} />
+                  <View style={[styles.bar, { height: 12, backgroundColor: themeColors.primary }]} />
+                  <View style={[styles.bar, { height: 10, backgroundColor: themeColors.primary }]} />
                 </View>
               )}
             </View>
             <Text
               style={[
                 styles.gridTitle,
-                currentSong?._id === song._id && styles.gridTitleActive,
+                currentSong?._id === song._id && { color: themeColors.primary },
               ]}
               numberOfLines={1}
             >
@@ -403,7 +403,7 @@ const OfflineModeView = () => {
         key={song._id}
         style={[
           styles.offlineGridItem,
-          isCurrentSong && styles.offlineGridItemActive,
+          isCurrentSong && [styles.offlineGridItemActive, { borderColor: themeColors.primary }],
         ]}
         onPress={() => handlePlaySong(song, index)}
       >
@@ -418,7 +418,7 @@ const OfflineModeView = () => {
               <Icon name="music" size={32} color={COLORS.textMuted} />
             </View>
           )}
-          <View style={styles.offlinePlayOverlay}>
+          <View style={[styles.offlinePlayOverlay, { backgroundColor: themeColors.primary }]}>
             <Icon
               name={isCurrentSong && isPlaying ? 'pause' : 'play'}
               size={20}
@@ -531,7 +531,7 @@ const OfflineModeView = () => {
 
       {/* Scan Button */}
       <TouchableOpacity
-        style={styles.scanButton}
+        style={[styles.scanButton, { borderColor: themeColors.primary }]}
         onPress={() => scanDeviceMusic()}
         disabled={isScanning}
       >
@@ -540,7 +540,7 @@ const OfflineModeView = () => {
         ) : (
           <Icon name="search" size={18} color={themeColors.primary} />
         )}
-        <Text style={styles.scanButtonText}>
+        <Text style={[styles.scanButtonText, { color: themeColors.primary }]}>
           {isScanning ? 'Scanning...' : 'Scan for Music'}
         </Text>
       </TouchableOpacity>

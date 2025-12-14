@@ -110,7 +110,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
       >
         {/* Background Gradient */}
         <LinearGradient
-          colors={['rgba(80, 56, 160, 0.8)', 'rgba(24, 24, 27, 0.8)', COLORS.background]}
+          colors={[`${themeColors.primary}CC`, 'rgba(24, 24, 27, 0.8)', COLORS.background]}
           style={styles.detailGradient}
         />
         
@@ -173,7 +173,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
                 >
                   <View style={styles.songNumber}>
                     {isCurrentSong && isPlaying ? (
-                      <Text style={styles.playingNote}>♫</Text>
+                      <Text style={[styles.playingNote, { color: themeColors.primary }]}>♫</Text>
                     ) : (
                       <Text style={styles.songNumberText}>{index + 1}</Text>
                     )}
@@ -185,7 +185,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
                     />
                     <View style={styles.songTextContainer}>
                       <Text 
-                        style={[styles.songTitle, isCurrentSong && styles.songTitleActive]}
+                        style={[styles.songTitle, isCurrentSong && { color: themeColors.primary }]}
                         numberOfLines={1}
                       >
                         {song.title}
@@ -218,6 +218,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
 export const AlbumsScreen = () => {
   const navigation = useNavigation();
   const { albums, isLoading, fetchAlbums, pendingAlbumId, clearPendingAlbumId } = useMusicStore();
+  const { colors: themeColors } = useThemeStore();
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
 
   useEffect(() => {
@@ -255,7 +256,7 @@ export const AlbumsScreen = () => {
           <Text style={styles.headerTitle}>Albums</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={themeColors.primary} />
         </View>
       </View>
     );
@@ -266,7 +267,7 @@ export const AlbumsScreen = () => {
       {/* Hero Header */}
       <View style={styles.heroContainer}>
         <LinearGradient
-          colors={['rgba(16, 185, 129, 0.2)', 'rgba(6, 78, 59, 0.1)', 'transparent']}
+          colors={[`${themeColors.primary}33`, `${themeColors.primary}1A`, 'transparent']}
           style={styles.heroGradient}
         />
         <View style={styles.header}>

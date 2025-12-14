@@ -8,15 +8,18 @@ import {
   StatusBar,
   Pressable,
   Modal,
+  Image,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { COLORS, SPACING } from '../constants/theme';
 import { useAuthStore } from '../store/useAuthStore';
+import { useThemeStore } from '../store/useThemeStore';
+import { USE_DEPLOYMENT } from '../config';
 import axiosInstance from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+const DRSLogo = require('../assets/DRS-Logo.png');
 
 const { height } = Dimensions.get('window');
 
@@ -27,6 +30,7 @@ const CLERK_FRONTEND_API = 'https://game-bunny-97.accounts.dev';
 export const LandingScreen = () => {
   const navigation = useNavigation();
   const { login } = useAuthStore();
+  const { colors: themeColors } = useThemeStore();
   const { dialogState, hideDialog, showError } = useDialog();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showWebView, setShowWebView] = useState(false);
@@ -195,19 +199,11 @@ export const LandingScreen = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      
-      <LinearGradient
-        colors={['#000000', '#0a0a1a', '#111827']}
-        style={styles.gradient}
-        pointerEvents="none"
-      />
 
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {/* Logo */}
         <View style={styles.logoSection}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoEmoji}>🎵</Text>
-          </View>
+          <Image source={DRSLogo} style={styles.DRSLogo} />
           <Text style={styles.appName}>DRS Music</Text>
           <Text style={styles.tagline}>Your music, your way</Text>
         </View>
@@ -226,24 +222,36 @@ export const LandingScreen = () => {
             onPress={handleGoogleSignIn}
             disabled={isSigningIn}
           >
-            <Text style={styles.googleG}>G</Text>
+            <Image 
+              source={{ uri: 'https://www.google.com/favicon.ico' }}
+              style={styles.googleLogo}
+              resizeMode="contain"
+              defaultSource={{ uri: 'https://www.google.com/favicon.ico' }}
+            />
             <Text style={styles.googleText}>Continue with Google</Text>
           </Pressable>
 
-          <Pressable
-            style={({ pressed }) => [styles.demoButton, pressed && styles.demoPressed]}
-            onPress={handleDemoLogin}
-            disabled={isSigningIn}
-          >
-            {isSigningIn ? (
-              <ActivityIndicator color={COLORS.primary} size="small" />
-            ) : (
-              <>
-                <Text style={styles.demoEmoji}>👤</Text>
-                <Text style={styles.demoText}>Continue as Demo User</Text>
-              </>
-            )}
-          </Pressable>
+          {/* Demo login - only show in local development */}
+          {!USE_DEPLOYMENT && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.demoButton, 
+                { borderColor: themeColors.primary, backgroundColor: themeColors.primary + '30' },
+                pressed && styles.demoPressed
+              ]}
+              onPress={handleDemoLogin}
+              disabled={isSigningIn}
+            >
+              {isSigningIn ? (
+                <ActivityIndicator color={themeColors.primary} size="small" />
+              ) : (
+                <>
+                  <Text style={styles.demoEmoji}>👤</Text>
+                  <Text style={[styles.demoText, { color: themeColors.primary }]}>Continue as Demo User</Text>
+                </>
+              )}
+            </Pressable>
+          )}
 
           <Text style={styles.termsText}>
             By continuing, you agree to our Terms of Service and Privacy Policy
@@ -285,7 +293,7 @@ export const LandingScreen = () => {
             cacheEnabled={true}
             renderLoading={() => (
               <View style={styles.webViewLoading}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
+                <ActivityIndicator size="large" color={themeColors.primary} />
                 <Text style={styles.loadingText}>Loading Clerk Sign-In...</Text>
               </View>
             )}
@@ -323,6 +331,10 @@ const FeatureRow = ({ icon, title, desc }: { icon: string; title: string; desc: 
 );
 
 const styles = StyleSheet.create({
+    DRSLogo: {
+    width: 120,
+    height: 120,
+  },
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -339,7 +351,7 @@ const styles = StyleSheet.create({
   },
   logoSection: {
     alignItems: 'center',
-    paddingTop: height * 0.06,
+    paddingTop: height * 0.08,
     paddingBottom: SPACING.xl,
   },
   logoCircle: {
@@ -407,16 +419,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#E0E0E0',
     transform: [{ scale: 0.98 }],
   },
-  googleG: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4285F4',
+  googleLogo: {
+    width: 24,
+    height: 24,
     marginRight: 12,
   },
   googleText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000000',
+    color: '#000000ff',
   },
   demoButton: {
     flexDirection: 'row',

@@ -79,6 +79,8 @@ export const AudioPlayer = () => {
     const lastSongIdRef = useRef<string | null>(null);
     const appStateRef = useRef(AppState.currentState);
     const isLoadingTrackRef = useRef(false);
+    const lastListeningUpdateRef = useRef<number>(Date.now());
+    const crossfadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const {
         audioUrl,
@@ -86,6 +88,9 @@ export const AudioPlayer = () => {
         isPlaying,
         updateProgress,
         setIsPlaying,
+        addListeningTime,
+        crossfade,
+        duration: storeDuration,
     } = usePlayerStore();
 
     // Get progress from TrackPlayer
@@ -144,6 +149,80 @@ export const AudioPlayer = () => {
             updateProgress(progress.position, progress.duration);
         }
     }, [progress.position, progress.duration, updateProgress]);
+
+    // Track listening time - updates every 10 seconds while playing
+    useEffect(() => {
+        if (!isPlaying) {
+            // Reset the timer when paused so we don't count paused time
+            lastListeningUpdateRef.current = Date.now();
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - lastListeningUpdateRef.current) / 1000);
+            
+            // Only add if at least 10 seconds have passed
+            if (elapsed >= 10) {
+                addListeningTime(elapsed);
+                lastListeningUpdateRef.current = now;
+            }
+        }, 10000); // Check every 10 seconds
+
+        return () => clearInterval(interval);
+    }, [isPlaying, addListeningTime]);
+
+    // Crossfade effect - fade out current song near the end
+    const CROSSFADE_DURATION = 3; // seconds before end to start crossfade
+    useEffect(() => {
+        // Clear any existing timeout
+        if (crossfadeTimeoutRef.current) {
+            clearTimeout(crossfadeTimeoutRef.current);
+            crossfadeTimeoutRef.current = null;
+        }
+
+        if (!crossfade || !isPlaying || !progress.duration) return;
+
+        const timeRemaining = progress.duration - progress.position;
+        
+        // If we're within crossfade range and haven't triggered yet
+        if (timeRemaining <= CROSSFADE_DURATION && timeRemaining > 0.5) {
+            // Start fading out volume
+            const fadeSteps = 10;
+            const fadeInterval = (timeRemaining * 1000) / fadeSteps;
+            let currentStep = 0;
+
+            const fadeOut = async () => {
+                try {
+                    currentStep++;
+                    const newVolume = Math.max(0, 1 - (currentStep / fadeSteps));
+                    await TrackPlayer.setVolume(newVolume);
+                    
+                    if (currentStep < fadeSteps) {
+                        crossfadeTimeoutRef.current = setTimeout(fadeOut, fadeInterval);
+                    }
+                } catch (error) {
+                    // Ignore errors during fade
+                }
+            };
+
+            crossfadeTimeoutRef.current = setTimeout(fadeOut, fadeInterval);
+        }
+
+        return () => {
+            if (crossfadeTimeoutRef.current) {
+                clearTimeout(crossfadeTimeoutRef.current);
+                crossfadeTimeoutRef.current = null;
+            }
+        };
+    }, [crossfade, isPlaying, progress.position, progress.duration]);
+
+    // Reset volume when song changes (after crossfade)
+    useEffect(() => {
+        if (currentSong && isInitializedRef.current) {
+            TrackPlayer.setVolume(1).catch(() => {});
+        }
+    }, [currentSong?._id]);
 
     // Sync current song changes to TrackPlayer
     useEffect(() => {

@@ -40,6 +40,7 @@ export const SongDetailScreen = () => {
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadOptionsOpen, setIsDownloadOptionsOpen] = useState(false);
   const { dialogState, hideDialog, showSuccess, showError, showConfirm } = useDialog();
   
   const {
@@ -165,7 +166,7 @@ export const SongDetailScreen = () => {
     if (!currentSong) return;
     setIsMenuOpen(false);
 
-    // Check if already downloaded
+    // Check if already downloaded for offline
     if (isDownloaded(currentSong._id)) {
       showConfirm(
         'Already Downloaded',
@@ -182,30 +183,100 @@ export const SongDetailScreen = () => {
       return;
     }
 
-    // Show confirmation dialog
-    showConfirm(
-      'Download Song',
-      `Download "${currentSong.title}" by ${currentSong.artist} for offline listening?`,
-      async () => {
-        setIsDownloading(true);
-        try {
-          const audioUrl = getFullAudioUrl(currentSong.audioUrl);
-          const success = await downloadSong(currentSong, audioUrl);
-          
-          if (success) {
-            showSuccess('Download Complete', `"${currentSong.title}" is now available offline!`);
-          } else {
-            showError('Download Failed', 'Could not download the song. Please try again.');
-          }
-        } catch (error) {
-          console.error('Download error:', error);
-          showError('Download Failed', 'Could not download the song. Please try again.');
-        } finally {
-          setIsDownloading(false);
-        }
-      },
-      'Download'
-    );
+    // Show download options modal
+    setIsDownloadOptionsOpen(true);
+  };
+
+  // Download for offline viewing within the app
+  const handleOfflineDownload = async () => {
+    if (!currentSong) return;
+    setIsDownloadOptionsOpen(false);
+    setIsDownloading(true);
+    
+    try {
+      const audioUrl = getFullAudioUrl(currentSong.audioUrl);
+      const success = await downloadSong(currentSong, audioUrl);
+      
+      if (success) {
+        showSuccess('Download Complete', `"${currentSong.title}" is now available offline!`);
+      } else {
+        showError('Download Failed', 'Could not download the song. Please try again.');
+      }
+    } catch (error) {
+      console.error('Offline download error:', error);
+      showError('Download Failed', 'Could not download the song. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Download to device storage (Downloads folder)
+  const handleDeviceDownload = async () => {
+    if (!currentSong) return;
+    setIsDownloadOptionsOpen(false);
+    setIsDownloading(true);
+    
+    try {
+      const audioUrl = getFullAudioUrl(currentSong.audioUrl);
+      const RNFS = require('react-native-fs');
+      
+      // Create filename from song title
+      const sanitizedTitle = currentSong.title.replace(/[/\\?%*:|"<>]/g, '-');
+      const filename = `${sanitizedTitle} - ${currentSong.artist}.mp3`;
+      
+      // Determine download path based on platform
+      const downloadDir = Platform.OS === 'android' 
+        ? RNFS.DownloadDirectoryPath 
+        : RNFS.DocumentDirectoryPath;
+      const filePath = `${downloadDir}/${filename}`;
+      
+      // Check if file already exists
+      const exists = await RNFS.exists(filePath);
+      if (exists) {
+        showConfirm(
+          'File Exists',
+          `A file named "${filename}" already exists. Replace it?`,
+          async () => {
+            await RNFS.unlink(filePath);
+            await performDeviceDownload(audioUrl, filePath, filename);
+          },
+          'Replace',
+          true
+        );
+        setIsDownloading(false);
+        return;
+      }
+      
+      await performDeviceDownload(audioUrl, filePath, filename);
+    } catch (error) {
+      console.error('Device download error:', error);
+      showError('Download Failed', 'Could not save the song to your device. Please try again.');
+      setIsDownloading(false);
+    }
+  };
+
+  const performDeviceDownload = async (audioUrl: string, filePath: string, filename: string) => {
+    try {
+      const RNFS = require('react-native-fs');
+      
+      const downloadResult = await RNFS.downloadFile({
+        fromUrl: audioUrl,
+        toFile: filePath,
+        background: true,
+        discretionary: true,
+      }).promise;
+      
+      if (downloadResult.statusCode === 200) {
+        showSuccess('Downloaded to Device', `"${filename}" has been saved to your ${Platform.OS === 'android' ? 'Downloads' : 'Documents'} folder!`);
+      } else {
+        showError('Download Failed', 'Could not save the song to your device.');
+      }
+    } catch (error) {
+      console.error('Perform device download error:', error);
+      showError('Download Failed', 'Could not save the song to your device.');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleVolumeChange = (value: number) => {
@@ -344,7 +415,7 @@ export const SongDetailScreen = () => {
             <Icon name="skip-back" size={32} color={COLORS.textPrimary} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.playButton} onPress={togglePlayPause}>
+          <TouchableOpacity style={[styles.playButton, { backgroundColor: themeColors.primary }]} onPress={togglePlayPause}>
             <Icon 
               name={isPlaying ? 'pause' : 'play'} 
               size={32} 
@@ -502,6 +573,70 @@ export const SongDetailScreen = () => {
                     ? 'Downloaded'
                     : 'Download'}
               </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Download Options Modal */}
+      <Modal
+        visible={isDownloadOptionsOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setIsDownloadOptionsOpen(false)}
+      >
+        <View style={styles.downloadOptionsOverlay}>
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setIsDownloadOptionsOpen(false)}
+          />
+          <View style={styles.downloadOptionsPanel}>
+            <Text style={styles.downloadOptionsTitle}>Download Options</Text>
+            <Text style={styles.downloadOptionsSubtitle}>
+              Choose how you want to save "{currentSong?.title}"
+            </Text>
+            
+            {/* Offline Viewing Option */}
+            <TouchableOpacity 
+              style={styles.downloadOption}
+              onPress={handleOfflineDownload}
+            >
+              <View style={[styles.downloadOptionIcon, { backgroundColor: themeColors.primaryMuted }]}>
+                <Icon name="smartphone" size={24} color={themeColors.primary} />
+              </View>
+              <View style={styles.downloadOptionInfo}>
+                <Text style={styles.downloadOptionTitle}>Offline Viewing</Text>
+                <Text style={styles.downloadOptionDesc}>
+                  Save for offline playback within the app
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={20} color={COLORS.textMuted} />
+            </TouchableOpacity>
+            
+            {/* Download to Device Option */}
+            <TouchableOpacity 
+              style={styles.downloadOption}
+              onPress={handleDeviceDownload}
+            >
+              <View style={[styles.downloadOptionIcon, { backgroundColor: 'rgba(59, 130, 246, 0.2)' }]}>
+                <Icon name="download" size={24} color="#3b82f6" />
+              </View>
+              <View style={styles.downloadOptionInfo}>
+                <Text style={styles.downloadOptionTitle}>Save to Device</Text>
+                <Text style={styles.downloadOptionDesc}>
+                  Download to your {Platform.OS === 'android' ? 'Downloads' : 'Documents'} folder
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={20} color={COLORS.textMuted} />
+            </TouchableOpacity>
+            
+            {/* Cancel Button */}
+            <TouchableOpacity 
+              style={styles.downloadCancelButton}
+              onPress={() => setIsDownloadOptionsOpen(false)}
+            >
+              <Text style={styles.downloadCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -978,6 +1113,76 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: 'center',
     paddingHorizontal: SPACING.xl,
+  },
+
+  // Download Options Modal
+  downloadOptionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  downloadOptionsPanel: {
+    backgroundColor: COLORS.zinc800,
+    borderRadius: BORDER_RADIUS.xxl,
+    padding: SPACING.lg,
+    marginHorizontal: SPACING.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(63, 63, 70, 0.5)',
+    maxWidth: 400,
+    width: '100%',
+  },
+  downloadOptionsTitle: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: SPACING.xs,
+  },
+  downloadOptionsSubtitle: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
+  },
+  downloadOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    backgroundColor: 'rgba(39, 39, 42, 0.5)',
+    borderRadius: BORDER_RADIUS.xl,
+    marginBottom: SPACING.sm,
+    gap: SPACING.md,
+  },
+  downloadOptionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  downloadOptionInfo: {
+    flex: 1,
+  },
+  downloadOptionTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  downloadOptionDesc: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+  },
+  downloadCancelButton: {
+    padding: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+  },
+  downloadCancelText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textMuted,
+    fontWeight: '500',
   },
 });
 

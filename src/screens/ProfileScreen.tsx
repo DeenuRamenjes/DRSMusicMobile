@@ -64,7 +64,7 @@ const StatCard = ({
 export const ProfileScreen = () => {
   const navigation = useNavigation();
   const { albums, likedSongs, likedSongsLoading, likedSongsInitialized, fetchLikedSongs } = useMusicStore();
-  const { currentSong, isPlaying, playSong, pauseSong } = usePlayerStore();
+  const { currentSong, isPlaying, playSong, pauseSong, totalListeningTime, loadListeningTime } = usePlayerStore();
   const { user, isAuthenticated } = useAuthStore();
   const { colors: themeColors } = useThemeStore();
   
@@ -72,28 +72,21 @@ export const ProfileScreen = () => {
     totalSongs: 0,
     totalAlbums: 0,
     likedCount: 0,
-    listeningTime: 0,
   });
 
   useEffect(() => {
     if (!likedSongsInitialized && !likedSongsLoading) {
       fetchLikedSongs();
     }
+    // Load listening time from storage
+    loadListeningTime();
   }, [likedSongsInitialized, likedSongsLoading]);
 
   useEffect(() => {
-    let totalListeningMinutes = 0;
-    likedSongs.forEach(song => {
-      if (song.duration) {
-        totalListeningMinutes += Math.floor(song.duration / 60);
-      }
-    });
-    
     setStats({
       totalSongs: albums.reduce((acc, album) => acc + (album.songs?.length || 0), 0),
       totalAlbums: albums.length,
       likedCount: likedSongs.length,
-      listeningTime: totalListeningMinutes,
     });
   }, [albums, likedSongs]);
 
@@ -127,7 +120,7 @@ export const ProfileScreen = () => {
       <View style={styles.heroSection}>
         {/* Gradient Background */}
         <LinearGradient
-          colors={['rgba(16, 185, 129, 0.3)', 'rgba(6, 78, 59, 0.2)', 'transparent']}
+          colors={[`${themeColors.primary}4D`, `${themeColors.primary}1A`, 'transparent']}
           style={styles.heroGradient}
         />
         
@@ -148,7 +141,7 @@ export const ProfileScreen = () => {
               )}
             </View>
             {/* Online Status */}
-            <View style={styles.onlineIndicator} />
+            <View style={[styles.onlineIndicator, { backgroundColor: themeColors.primary }]} />
           </View>
 
           {/* Profile Info */}
@@ -176,7 +169,16 @@ export const ProfileScreen = () => {
           <StatCard icon="🎵" value={stats.totalSongs} label="Songs" color="emerald" />
           <StatCard icon="💿" value={stats.totalAlbums} label="Albums" color="blue" />
           <StatCard icon="❤️" value={stats.likedCount} label="Liked" color="pink" />
-          <StatCard icon="⏱" value={`${stats.listeningTime}m`} label="Listen Time" color="purple" />
+          <StatCard 
+            icon="⏱️" 
+            value={
+              totalListeningTime >= 3600 
+                ? `${Math.floor(totalListeningTime / 3600)}h ${Math.floor((totalListeningTime % 3600) / 60)}m`
+                : `${Math.floor(totalListeningTime / 60)}m`
+            } 
+            label="Listen Time" 
+            color="purple" 
+          />
         </View>
       </View>
 
@@ -184,7 +186,7 @@ export const ProfileScreen = () => {
       {currentSong && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionIcon}>📈</Text>
+            <Text style={styles.sectionIcon}>🎵</Text>
             <Text style={styles.sectionTitle}>Now Playing</Text>
           </View>
           <View style={styles.nowPlayingCard}>
@@ -217,11 +219,11 @@ export const ProfileScreen = () => {
                 {isPlaying && (
                   <View style={styles.playingStatus}>
                     <View style={styles.playingBars}>
-                      <View style={[styles.playingBar, { height: 16 }]} />
-                      <View style={[styles.playingBar, { height: 12 }]} />
-                      <View style={[styles.playingBar, { height: 20 }]} />
+                      <View style={[styles.playingBar, { height: 16, backgroundColor: themeColors.primary }]} />
+                      <View style={[styles.playingBar, { height: 12, backgroundColor: themeColors.primary }]} />
+                      <View style={[styles.playingBar, { height: 20, backgroundColor: themeColors.primary }]} />
                     </View>
-                    <Text style={styles.playingText}>Playing</Text>
+                    <Text style={[styles.playingText, { color: themeColors.primary }]}>Playing</Text>
                   </View>
                 )}
               </View>
@@ -275,7 +277,7 @@ export const ProfileScreen = () => {
                   <Text
                     style={[
                       styles.likedSongTitle,
-                      currentSong?._id === song._id && styles.likedSongTitleActive,
+                      currentSong?._id === song._id && { color: themeColors.primary },
                     ]}
                     numberOfLines={1}
                   >
@@ -287,9 +289,9 @@ export const ProfileScreen = () => {
                 </View>
                 {currentSong?._id === song._id && isPlaying && (
                   <View style={styles.likedSongPlaying}>
-                    <View style={[styles.smallBar, { height: 12 }]} />
-                    <View style={[styles.smallBar, { height: 8 }]} />
-                    <View style={[styles.smallBar, { height: 12 }]} />
+                    <View style={[styles.smallBar, { height: 12, backgroundColor: themeColors.primary }]} />
+                    <View style={[styles.smallBar, { height: 8, backgroundColor: themeColors.primary }]} />
+                    <View style={[styles.smallBar, { height: 12, backgroundColor: themeColors.primary }]} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -302,8 +304,8 @@ export const ProfileScreen = () => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>💿</Text>
-          <Text style={styles.sectionTitle}>Your Library</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Home' as never)}>
+          <Text style={styles.sectionTitle}>Library</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Albums' as never)}>
             <Text style={styles.seeAllText}>Browse all</Text>
           </TouchableOpacity>
         </View>

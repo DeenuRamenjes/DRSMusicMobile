@@ -27,13 +27,19 @@ const SongItem = ({
   onPlay,
   onDelete,
   showDeleteButton,
+  isCurrentSong,
+  isPlaying,
 }: {
   song: LocalSong;
   themeColor: string;
   onPlay: () => void;
   onDelete?: () => void;
   showDeleteButton: boolean;
+  isCurrentSong: boolean;
+  isPlaying: boolean;
 }) => {
+  const showPause = isCurrentSong && isPlaying;
+  
   return (
     <TouchableOpacity style={styles.songItem} onPress={onPlay} activeOpacity={0.7}>
       {/* Album Art */}
@@ -49,7 +55,7 @@ const SongItem = ({
 
       {/* Song Info */}
       <View style={styles.songInfo}>
-        <Text style={styles.songTitle} numberOfLines={1}>
+        <Text style={[styles.songTitle, isCurrentSong && { color: themeColor }]} numberOfLines={1}>
           {song.title}
         </Text>
         <Text style={styles.songArtist} numberOfLines={1}>
@@ -75,7 +81,7 @@ const SongItem = ({
           style={[styles.playButton, { backgroundColor: themeColor }]}
           onPress={onPlay}
         >
-          <Icon name="play" size={16} color="#fff" />
+          <Icon name={showPause ? "pause" : "play"} size={16} color="#fff" style={!showPause && { marginLeft: 2 }} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -99,7 +105,7 @@ export const OfflineMusicScreen = () => {
     setOfflineMode,
     clearAllDownloads,
   } = useOfflineMusicStore();
-  const { setCurrentSong, playSong, setQueue } = usePlayerStore();
+  const { currentSong, isPlaying, pauseSong, playAlbum } = usePlayerStore();
 
   const [activeTab, setActiveTab] = useState<TabType>('downloaded');
   const [refreshing, setRefreshing] = useState(false);
@@ -119,6 +125,17 @@ export const OfflineMusicScreen = () => {
   };
 
   const handlePlaySong = (song: LocalSong) => {
+    // If it's the same song, toggle play/pause
+    if (currentSong?._id === song._id) {
+      if (isPlaying) {
+        pauseSong();
+      } else {
+        // Resume playback
+        usePlayerStore.getState().resumeSong();
+      }
+      return;
+    }
+
     // Get all songs from the current tab for the queue
     const currentSongs = activeTab === 'downloaded' ? downloadedSongs : deviceSongs;
     
@@ -136,7 +153,6 @@ export const OfflineMusicScreen = () => {
       return;
     }
     
-    const { playAlbum } = usePlayerStore.getState();
     playAlbum(queueSongs as any, songIndex);
   };
 
@@ -176,6 +192,8 @@ export const OfflineMusicScreen = () => {
       onPlay={() => handlePlaySong(item)}
       onDelete={activeTab === 'downloaded' ? () => handleDeleteSong(item) : undefined}
       showDeleteButton={activeTab === 'downloaded'}
+      isCurrentSong={currentSong?._id === item._id}
+      isPlaying={isPlaying}
     />
   );
 

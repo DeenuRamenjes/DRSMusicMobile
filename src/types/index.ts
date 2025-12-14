@@ -120,6 +120,15 @@ export interface Message {
     content: string;
     createdAt: string;
     updatedAt?: string;
+    messageType?: 'text' | 'song';
+    songData?: {
+        songId: string;
+        title: string;
+        artist: string;
+        imageUrl: string;
+        audioUrl: string;
+        duration: number;
+    };
 }
 
 // Stats response
@@ -129,6 +138,37 @@ export interface Stats {
     totalUsers: number;
     uniqueArtists: number;
     totalArtists?: number;
+}
+
+// Todo interface
+export interface Todo {
+    _id: string;
+    title: string;
+    description?: string;
+    completed: boolean;
+    priority: 'low' | 'medium' | 'high';
+    category: 'general' | 'music' | 'backend' | 'frontend' | 'bug' | 'feature';
+    createdBy: {
+        _id: string;
+        fullName: string;
+        imageUrl?: string;
+        email?: string;
+    } | string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface TodoStats {
+    total: number;
+    completed: number;
+    pending: number;
+    highPriority: number;
+    completionRate: number;
+    categoryStats: {
+        _id: string;
+        count: number;
+        completed: number;
+    }[];
 }
 
 // API Response types

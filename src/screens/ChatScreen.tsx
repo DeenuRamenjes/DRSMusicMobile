@@ -11,6 +11,8 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -19,7 +21,9 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useFriendsStore, formatRelativeTime } from '../store/useFriendsStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { User, Message } from '../types';
+import { useMusicStore } from '../store/useMusicStore';
+import { usePlayerStore } from '../store/usePlayerStore';
+import { User, Message, Song } from '../types';
 import { getFullImageUrl } from '../config';
 
 type ChatScreenRouteProp = RouteProp<{ Chat: { user: User } }, 'Chat'>;
@@ -60,12 +64,23 @@ const MessageBubble = ({
   isOwn,
   avatarUrl,
   themeColor,
+  onPlaySong,
 }: {
   message: Message;
   isOwn: boolean;
   avatarUrl: string;
   themeColor: string;
+  onPlaySong?: (songData: Message['songData']) => void;
 }) => {
+  const isSongMessage = message.messageType === 'song' && message.songData;
+
+  // Format duration from seconds to mm:ss
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <View style={[styles.messageBubbleContainer, isOwn && styles.messageBubbleContainerOwn]}>
       {!isOwn && (
@@ -73,20 +88,67 @@ const MessageBubble = ({
           {avatarUrl ? (
             <Image source={{ uri: getFullImageUrl(avatarUrl) }} style={styles.messageAvatar} />
           ) : (
-            <View 
-            // style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}
-            >
-              {/* <Text style={styles.avatarText}>?</Text> */}
-            </View>
+            <View />
           )}
         </View>
       )}
-      <View style={[styles.messageBubble, isOwn ? { backgroundColor: themeColor } : styles.messageBubbleReceived]}>
-        <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>{message.content}</Text>
-        <Text style={[styles.messageTime, isOwn && styles.messageTimeOwn]}>
-          {formatMessageTime(message.createdAt)}
-        </Text>
-      </View>
+      
+      {isSongMessage ? (
+        // Song Message Card
+        <TouchableOpacity 
+          style={[styles.songMessageCard, isOwn ? { backgroundColor: themeColor } : styles.songCardReceived]}
+          onPress={() => onPlaySong?.(message.songData)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.songCardContent}>
+            {/* Album Art */}
+            <View style={styles.songAlbumArt}>
+              {message.songData?.imageUrl ? (
+                <Image 
+                  source={{ uri: getFullImageUrl(message.songData.imageUrl) }} 
+                  style={styles.songAlbumImage}
+                />
+              ) : (
+                <View style={[styles.songAlbumImage, styles.songAlbumPlaceholder]}>
+                  <Icon name="music" size={24} color={COLORS.textMuted} />
+                </View>
+              )}
+            </View>
+            
+            {/* Song Info */}
+            <View style={styles.songInfo}>
+              <Text style={[styles.songTitle, isOwn && styles.songTitleOwn]} numberOfLines={1}>
+                {message.songData?.title || 'Unknown Song'}
+              </Text>
+              <Text style={[styles.songArtist, isOwn && styles.songArtistOwn]} numberOfLines={1}>
+                {message.songData?.artist || 'Unknown Artist'}
+              </Text>
+              {message.songData?.duration && (
+                <Text style={[styles.songDuration, isOwn && styles.songDurationOwn]}>
+                  {formatDuration(message.songData.duration)}
+                </Text>
+              )}
+            </View>
+            
+            {/* Play Button */}
+            <View style={[styles.playButton, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : themeColor }]}>
+              <Icon name="play" size={18} color={isOwn ? '#fff' : '#fff'} />
+            </View>
+          </View>
+          
+          <Text style={[styles.messageTime, isOwn && styles.messageTimeOwn, { marginTop: SPACING.xs }]}>
+            {formatMessageTime(message.createdAt)}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        // Regular Text Message
+        <View style={[styles.messageBubble, isOwn ? { backgroundColor: themeColor } : styles.messageBubbleReceived]}>
+          <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>{message.content}</Text>
+          <Text style={[styles.messageTime, isOwn && styles.messageTimeOwn]}>
+            {formatMessageTime(message.createdAt)}
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -111,6 +173,7 @@ export const ChatScreen = () => {
     messages,
     fetchMessages,
     sendMessage,
+    sendSongMessage,
     isLoading,
     onlineUsers,
     userActivities,
@@ -118,10 +181,15 @@ export const ChatScreen = () => {
     setChatScreenActive,
     clearUnreadCount,
   } = useFriendsStore();
+  
+  const { songs, fetchSongs } = useMusicStore();
+  const { playSong } = usePlayerStore();
 
   const [messageText, setMessageText] = useState('');
   const flatListRef = useRef<FlatList>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [showSongPicker, setShowSongPicker] = useState(false);
+  const [songSearchQuery, setSongSearchQuery] = useState('');
 
   // Get user IDs
   const currentUserId = authUser?.clerkId || authUser?.id || '';
@@ -132,6 +200,15 @@ export const ChatScreen = () => {
   const activity = userActivities.get(chatUserId);
   const isPlaying = activity && activity !== 'Idle';
 
+  // Filter songs based on search query
+  const filteredSongs = songs.filter((song) => {
+    const query = songSearchQuery.toLowerCase();
+    return (
+      song.title.toLowerCase().includes(query) ||
+      song.artist.toLowerCase().includes(query)
+    );
+  });
+
   // Set selected user and fetch messages
   useEffect(() => {
     setSelectedUser(chatUser);
@@ -140,6 +217,11 @@ export const ChatScreen = () => {
     
     if (chatUserId) {
       fetchMessages(chatUserId);
+    }
+    
+    // Fetch songs for song picker
+    if (songs.length === 0) {
+      fetchSongs();
     }
     
     return () => {
@@ -169,6 +251,45 @@ export const ChatScreen = () => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messageText, chatUserId, currentUserId, sendMessage]);
+
+  // Handle sending a song
+  const handleSendSong = useCallback((song: Song) => {
+    sendSongMessage(chatUserId, currentUserId, {
+      songId: song._id,
+      title: song.title,
+      artist: song.artist,
+      imageUrl: song.imageUrl || '',
+      audioUrl: song.audioUrl || '',
+      duration: song.duration || 0,
+    });
+    setShowSongPicker(false);
+    setSongSearchQuery('');
+    
+    // Scroll to bottom after sending
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [chatUserId, currentUserId, sendSongMessage]);
+
+  // Handle playing a song from a message
+  const handlePlaySong = useCallback((songData: Message['songData']) => {
+    if (!songData) return;
+    
+    // Create a Song object from songData
+    const song: Song = {
+      _id: songData.songId,
+      title: songData.title,
+      artist: songData.artist,
+      imageUrl: songData.imageUrl,
+      audioUrl: songData.audioUrl,
+      duration: songData.duration,
+      albumIds: [],
+      createdAt: '',
+      updatedAt: '',
+    };
+    
+    playSong(song);
+  }, [playSong]);
 
   const handleBack = () => {
     navigation.goBack();
@@ -200,6 +321,7 @@ export const ChatScreen = () => {
         isOwn={isOwn}
         avatarUrl={isOwn ? (authUser?.imageUrl || '') : (chatUser.imageUrl || '')}
         themeColor={themeColors.primary}
+        onPlaySong={handlePlaySong}
       />
     );
   };
@@ -257,8 +379,8 @@ export const ChatScreen = () => {
       {/* Messages */}
       <KeyboardAvoidingView
         style={styles.messagesContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {isLoading ? (
           <View style={styles.loadingContainer}>
@@ -312,9 +434,10 @@ export const ChatScreen = () => {
 
            <TouchableOpacity
             style={[styles.sendButton, { backgroundColor: themeColors.primary }]}
+            onPress={() => setShowSongPicker(true)}
           >
             <Icon
-              name="audio-off"
+              name="music"
               size={20}
               color={COLORS.textPrimary}
             />
@@ -322,6 +445,89 @@ export const ChatScreen = () => {
 
         </View>
       </KeyboardAvoidingView>
+
+      {/* Song Picker Modal */}
+      <Modal
+        visible={showSongPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowSongPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.songPickerModal}>
+            {/* Header */}
+            <View style={styles.songPickerHeader}>
+              <Text style={styles.songPickerTitle}>Share a Song</Text>
+              <TouchableOpacity onPress={() => {
+                setShowSongPicker(false);
+                setSongSearchQuery('');
+              }}>
+                <Icon name="x" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Search Bar */}
+            <View style={styles.songSearchContainer}>
+              <Icon name="search" size={18} color={COLORS.textMuted} />
+              <TextInput
+                style={styles.songSearchInput}
+                placeholder="Search songs..."
+                placeholderTextColor={COLORS.textMuted}
+                value={songSearchQuery}
+                onChangeText={setSongSearchQuery}
+              />
+              {songSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSongSearchQuery('')}>
+                  <Icon name="x" size={16} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {/* Songs List */}
+            <FlatList
+              data={filteredSongs}
+              keyExtractor={(item) => item._id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.songsList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.songItem}
+                  onPress={() => handleSendSong(item)}
+                >
+                  {item.imageUrl ? (
+                    <Image
+                      source={{ uri: getFullImageUrl(item.imageUrl) }}
+                      style={styles.songItemImage}
+                    />
+                  ) : (
+                    <View style={[styles.songItemImage, styles.songItemImagePlaceholder]}>
+                      <Icon name="music" size={20} color={COLORS.textMuted} />
+                    </View>
+                  )}
+                  <View style={styles.songItemInfo}>
+                    <Text style={styles.songItemTitle} numberOfLines={1}>{item.title}</Text>
+                    <Text style={styles.songItemArtist} numberOfLines={1}>{item.artist}</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={[styles.songItemSendButton, { backgroundColor: themeColors.primary }]}
+                    onPress={() => handleSendSong(item)}
+                  >
+                    <Icon name="send" size={16} color="#fff" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.noSongsContainer}>
+                  <Icon name="music" size={48} color={COLORS.textMuted} />
+                  <Text style={styles.noSongsText}>
+                    {songSearchQuery ? 'No songs found' : 'No songs available'}
+                  </Text>
+                </View>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -499,10 +705,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
     gap: SPACING.sm,
     backgroundColor: COLORS.background,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.zinc800,
   },
   inputWrapper: {
     flex: 1,
@@ -538,6 +746,159 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 0,
+  },
+  // Song Message Styles
+  songMessageCard: {
+    maxWidth: '80%',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.sm,
+    minWidth: 200,
+  },
+  songCardReceived: {
+    backgroundColor: COLORS.zinc800,
+  },
+  songCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  songAlbumArt: {
+    marginRight: SPACING.sm,
+  },
+  songAlbumImage: {
+    width: 50,
+    height: 50,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  songAlbumPlaceholder: {
+    backgroundColor: COLORS.zinc700,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  songInfo: {
+    flex: 1,
+  },
+  songTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  songTitleOwn: {
+    color: '#fff',
+  },
+  songArtist: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  songArtistOwn: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  songDuration: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textDim,
+    marginTop: 2,
+  },
+  songDurationOwn: {
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  playButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: SPACING.sm,
+  },
+  // Song Picker Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  songPickerModal: {
+    backgroundColor: COLORS.zinc900,
+    borderTopLeftRadius: BORDER_RADIUS.xl,
+    borderTopRightRadius: BORDER_RADIUS.xl,
+    maxHeight: '80%',
+    paddingBottom: SPACING.xxl,
+  },
+  songPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.zinc800,
+  },
+  songPickerTitle: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  songSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.zinc800,
+    margin: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    height: 44,
+    gap: SPACING.sm,
+  },
+  songSearchInput: {
+    flex: 1,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textPrimary,
+  },
+  songsList: {
+    paddingHorizontal: SPACING.md,
+  },
+  songItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.zinc800,
+  },
+  songItemImage: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.md,
+    marginRight: SPACING.md,
+  },
+  songItemImagePlaceholder: {
+    backgroundColor: COLORS.zinc800,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  songItemInfo: {
+    flex: 1,
+  },
+  songItemTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  songItemArtist: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  songItemSendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noSongsContainer: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  noSongsText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textMuted,
+    marginTop: SPACING.md,
   },
 });
 

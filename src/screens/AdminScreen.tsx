@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,10 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  Animated,
+  Easing,
+  Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -17,6 +21,10 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
 import axiosInstance from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+
+const DRSLogo = require('../assets/DRS-Logo.png');
+
+const { width, height } = Dimensions.get('window');
 
 interface Stats {
   totalUsers: number;
@@ -30,6 +38,19 @@ export const AdminScreen = () => {
   const { colors: themeColors } = useThemeStore();
   const { dialogState, hideDialog, showSuccess, showError } = useDialog();
   
+  // Splash screen state
+  const [showSplash, setShowSplash] = useState(true);
+  
+  // Animation values
+  const splashOpacity = useRef(new Animated.Value(1)).current;
+  const iconScale = useRef(new Animated.Value(0)).current;
+  const iconRotate = useRef(new Animated.Value(0)).current;
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const titleTranslateY = useRef(new Animated.Value(30)).current;
+  const subtitleOpacity = useRef(new Animated.Value(0)).current;
+  const subtitleTranslateY = useRef(new Animated.Value(20)).current;
+  const shimmerOpacity = useRef(new Animated.Value(0)).current;
+  
   // Stats state
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
@@ -40,6 +61,100 @@ export const AdminScreen = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationImageUrl, setNotificationImageUrl] = useState('');
   const [isSendingNotification, setIsSendingNotification] = useState(false);
+
+  // Splash animation sequence
+  useEffect(() => {
+    // Icon animation - bounce in
+    Animated.spring(iconScale, {
+      toValue: 1,
+      tension: 50,
+      friction: 7,
+      useNativeDriver: true,
+    }).start();
+
+    // Icon subtle rotation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(iconRotate, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(iconRotate, {
+          toValue: 0,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Title animation - delay then fade in + slide up
+    Animated.sequence([
+      Animated.delay(300),
+      Animated.parallel([
+        Animated.timing(titleOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(titleTranslateY, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    // Subtitle animation
+    Animated.sequence([
+      Animated.delay(500),
+      Animated.parallel([
+        Animated.timing(subtitleOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(subtitleTranslateY, {
+          toValue: 0,
+          duration: 400,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    // Shimmer effect
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerOpacity, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerOpacity, {
+          toValue: 0.3,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Hide splash after 2 seconds
+    const timer = setTimeout(() => {
+      Animated.timing(splashOpacity, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowSplash(false);
+      });
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Fetch stats on mount
   useEffect(() => {
@@ -89,12 +204,6 @@ export const AdminScreen = () => {
 
   const adminMenuItems = [
     { 
-      icon: 'bell', 
-      label: 'Send Notification', 
-      description: 'Send broadcast notification to all users',
-      onPress: () => setIsNotificationModalOpen(true),
-    },
-    { 
       icon: 'music', 
       label: 'Manage Songs', 
       description: 'Add, edit, or remove songs',
@@ -118,12 +227,123 @@ export const AdminScreen = () => {
       description: 'Upload new songs to the library',
       onPress: () => (navigation as any).navigate('UploadSong'),
     },
+    { 
+      icon: 'bell', 
+      label: 'Send Notification', 
+      description: 'Send broadcast notification to all users',
+      onPress: () => setIsNotificationModalOpen(true),
+    },
+    { 
+      icon: 'check-square', 
+      label: 'Todo List', 
+      description: 'Manage development tasks and todos',
+      onPress: () => (navigation as any).navigate('Todo'),
+    },
   ];
-  
+
+
+  // Icon rotation interpolation
+  const iconRotateInterpolate = iconRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-5deg', '5deg'],
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      
+      {/* Welcome Splash Screen */}
+      {showSplash && (
+        <Animated.View 
+          style={[
+            styles.splashContainer, 
+            { 
+              opacity: splashOpacity,
+              backgroundColor: COLORS.background,
+            }
+          ]}
+          pointerEvents="none"
+        >
+          {/* Gradient Background Overlay */}
+          <View style={[styles.splashGradient, { backgroundColor: themeColors.primaryMuted }]} />
+          
+          {/* Animated Icon */}
+          <Animated.View 
+            style={[
+              styles.splashIconContainer,
+              {
+                transform: [
+                  { scale: iconScale },
+                  { rotate: iconRotateInterpolate },
+                ],
+                // backgroundColor: themeColors.primaryMuted,
+              }
+            ]}
+          >
+            <Image source={DRSLogo} style={styles.DRSLogo} />
+            {/* <Icon name="headphones" size={64} color={themeColors.primary} /> */}
+          </Animated.View>
+          
+          {/* Title */}
+          <Animated.Text 
+            style={[
+              styles.splashTitle,
+              {
+                opacity: titleOpacity,
+                transform: [{ translateY: titleTranslateY }],
+              }
+            ]}
+          >
+            Welcome to
+          </Animated.Text>
+          
+          {/* Subtitle with gradient effect */}
+          <Animated.View
+            style={{
+              opacity: subtitleOpacity,
+              transform: [{ translateY: subtitleTranslateY }],
+            }}
+          >
+            <Animated.Text 
+              style={[
+                styles.splashSubtitle, 
+                { color: themeColors.primary }
+              ]}
+            >
+              Admin Panel
+            </Animated.Text>
+          </Animated.View>
+          
+          {/* Music Sound Wave Animation */}
+          <View style={styles.soundWaveContainer}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Animated.View 
+                key={i}
+                style={[
+                  styles.soundWaveBar,
+                  {
+                    backgroundColor: themeColors.primary,
+                    opacity: shimmerOpacity,
+                    height: 20 + (i % 3) * 15,
+                  }
+                ]}
+              />
+            ))}
+          </View>
+          <Animated.View 
+            style={[
+              styles.taglineContainer,
+              {
+                opacity: subtitleOpacity,
+              }
+            ]}
+          >
+            <Icon name="disc" size={16} color={COLORS.textMuted} />
+            <Text style={styles.taglineText}>DRS Music Control Center</Text>
+            <Icon name="disc" size={16} color={COLORS.textMuted} />
+          </Animated.View>
+        </Animated.View>
+      )}
       
       {/* Header */}
       <View style={styles.header}>
@@ -186,19 +406,6 @@ export const AdminScreen = () => {
               <Text style={styles.statNumber}>{stats?.totalAlbums ?? '--'}</Text>
             )}
             <Text style={styles.statLabel}>Albums</Text>
-          </View>
-        </View>
-
-        {/* Artists stat in separate row */}
-        <View style={styles.artistsStatContainer}>
-          <View style={[styles.artistsStatCard, { borderColor: themeColors.primaryMuted }]}>
-            <Icon name="mic" size={20} color={themeColors.primary} />
-            {isLoadingStats ? (
-              <ActivityIndicator size="small" color={themeColors.primary} />
-            ) : (
-              <Text style={styles.statNumber}>{stats?.totalArtists ?? '--'}</Text>
-            )}
-            <Text style={styles.statLabel}>Artists</Text>
           </View>
         </View>
 
@@ -331,6 +538,10 @@ export const AdminScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    DRSLogo: {
+    width: 100,
+    height: 100,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -578,6 +789,85 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
     color: COLORS.textPrimary,
+  },
+  // Splash screen styles
+  splashContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  splashGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.1,
+  },
+  splashIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+  },
+  splashTitle: {
+    fontSize: 24,
+    fontWeight: '400',
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  splashSubtitle: {
+    fontSize: 36,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  soundWaveContainer: {
+    flexDirection: 'row',
+    position: 'absolute',
+    bottom: '22%',
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  soundWaveBar: {
+    width: 6,
+    borderRadius: 3,
+  },
+  musicNotesContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  musicNote: {
+    position: 'absolute',
+  },
+  musicNoteLeft: {
+    top: '20%',
+    left: '15%',
+  },
+  musicNoteRight: {
+    top: '25%',
+    right: '15%',
+  },
+  taglineContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: '12%',
+    gap: SPACING.sm,
+  },
+  taglineText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    fontWeight: '500',
   },
 });
 

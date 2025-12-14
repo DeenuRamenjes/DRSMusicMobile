@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { StatusBar, ActivityIndicator, View, Text, StyleSheet } from 'react-native';
+import { StatusBar, StyleSheet } from 'react-native';
 
 import { LandingScreen } from '../screens/LandingScreen';
 import { MainLayout } from '../screens/MainLayout';
@@ -17,7 +17,9 @@ import { ManageUsersScreen } from '../screens/ManageUsersScreen';
 import { CreateAlbumScreen } from '../screens/CreateAlbumScreen';
 import { EditAlbumScreen } from '../screens/EditAlbumScreen';
 import { EditSongScreen } from '../screens/EditSongScreen';
+import { TodoScreen } from '../screens/TodoScreen';
 import { ConnectionScreen } from '../components/ConnectionScreen';
+import { SplashScreen } from '../components/SplashScreen';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useConnectionStore } from '../store/useConnectionStore';
@@ -35,6 +37,8 @@ export const AppNavigator = () => {
   const [initialCheckDone, setInitialCheckDone] = useState(false);
   const [connectionFailed, setConnectionFailed] = useState(false);
   const [useOffline, setUseOffline] = useState(false);
+  const [splashAnimationComplete, setSplashAnimationComplete] = useState(false);
+  const [authTimedOut, setAuthTimedOut] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -48,12 +52,20 @@ export const AppNavigator = () => {
       
       // If connected, check auth with a timeout
       if (connected) {
+        // Safety timeout - if auth takes longer than 15 seconds, force stop loading
         const authTimeout = setTimeout(() => {
-          // If auth takes too long, force set isLoading to false
+          console.warn('Auth timeout reached - forcing loading to stop');
           useAuthStore.getState().setIsLoading(false);
-        }, 50000); // 50 second timeout
+          setAuthTimedOut(true);
+        }, 15000); // 15 second timeout
         
-        checkAuth().finally(() => clearTimeout(authTimeout));
+        try {
+          await checkAuth();
+        } catch (error) {
+          console.error('Auth check failed:', error);
+        } finally {
+          clearTimeout(authTimeout);
+        }
       }
     };
     
@@ -67,6 +79,18 @@ export const AppNavigator = () => {
     }
   }, [isConnected, initialCheckDone, useOffline]);
 
+  // Secondary safety: If isLoading is still true after initial check + animation, force stop after 10s
+  useEffect(() => {
+    if (initialCheckDone && splashAnimationComplete && isLoading && !useOffline) {
+      const safetyTimeout = setTimeout(() => {
+        console.warn('Secondary safety timeout - forcing isLoading to false');
+        useAuthStore.getState().setIsLoading(false);
+      }, 10000); // 10 seconds after splash completes
+      
+      return () => clearTimeout(safetyTimeout);
+    }
+  }, [initialCheckDone, splashAnimationComplete, isLoading, useOffline]);
+
   const handleGoOffline = () => {
     setUseOffline(true);
     setConnectionFailed(false);
@@ -74,27 +98,14 @@ export const AppNavigator = () => {
     setOfflineMode(true);
   };
 
-  // Wait for initial connection check
-  if (!initialCheckDone) {
+  // Wait for initial connection check AND splash animation - show animated splash screen
+  if (!initialCheckDone || !splashAnimationComplete) {
     return (
       <>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <ConnectionScreen 
-          onRetry={() => {
-            checkConnection().then((connected) => {
-              if (connected) {
-                setConnectionFailed(false);
-                // Check auth with a timeout to prevent infinite loading
-                const authTimeout = setTimeout(() => {
-                  // If auth takes too long, force set isLoading to false
-                  useAuthStore.getState().setIsLoading(false);
-                }, 20000); // 20 second timeout for auth
-                
-                checkAuth().finally(() => clearTimeout(authTimeout));
-              }
-            });
-          }}
-          onOfflinePress={handleGoOffline}
+        <SplashScreen 
+          message={initialCheckDone ? "Ready!" : "Connecting to server..."} 
+          onAnimationComplete={() => setSplashAnimationComplete(true)}
         />
       </>
     );
@@ -129,10 +140,10 @@ export const AppNavigator = () => {
   // Only show auth loading if we're NOT in offline mode
   if (isLoading && !useOffline) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
+      <>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <SplashScreen message="Signing in..." />
+      </>
     );
   }
 
@@ -252,21 +263,17 @@ export const AppNavigator = () => {
             gestureDirection: 'horizontal',
           }}
         />
+        <Stack.Screen 
+          name="Todo" 
+          component={TodoScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
 };
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-  loadingText: {
-    color: COLORS.textMuted,
-    marginTop: 12,
-    fontSize: 14,
-  },
-});
+// Empty styles - keeping for potential future use
+const styles = StyleSheet.create({});

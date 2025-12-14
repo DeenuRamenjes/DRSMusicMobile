@@ -133,6 +133,7 @@ export const DIMENSIONS = {
 
     // Playback controls bar
     playbackHeight: 72,
+    playbackHeightCompact: 56,
     playbackHeightMobile: 72,
 
     // Sidebar (for tablet/landscape)

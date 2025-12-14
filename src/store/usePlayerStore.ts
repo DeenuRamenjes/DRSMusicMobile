@@ -4,8 +4,9 @@ import { Song } from '../types';
 import axiosInstance from '../api/axios';
 import { getFullAudioUrl, getFullImageUrl } from '../config';
 
-// Storage key for persisting last song
+// Storage keys
 const LAST_SONG_KEY = '@drs_music_last_song';
+const LISTENING_TIME_KEY = '@drs_music_listening_time';
 
 // Build shuffle queue - matching web app logic
 const buildShuffleQueue = (songs: Song[], excludeSongId?: string): Song[] => {
@@ -74,6 +75,7 @@ interface PlayerState {
     audioQuality: 'low' | 'normal' | 'high';
     crossfade: boolean;
     audioUrl: string | null;
+    totalListeningTime: number; // Total listening time in seconds
 
     // Actions
     playSong: (song: Song) => void;
@@ -101,6 +103,8 @@ interface PlayerState {
     loadSettingsFromBackend: () => Promise<void>;
     onPlaybackEnd: () => void;
     cleanup: () => void;
+    addListeningTime: (seconds: number) => void;
+    loadListeningTime: () => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -119,6 +123,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     audioQuality: 'high',
     crossfade: false,
     audioUrl: null,
+    totalListeningTime: 0,
 
     playSong: (song: Song) => {
         const state = get();
@@ -141,17 +146,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         // Find the song in the queue
         let songIndex = state.queue.findIndex((s) => s._id === song._id);
 
-        // For local/offline files, if not in queue, add it to queue
+        // If song not in queue, add it
         if (songIndex === -1) {
-            if (isLocalFile) {
-                // Add song to queue for local files
-                const newQueue = [...state.queue, song];
-                songIndex = newQueue.length - 1;
-                set({ queue: newQueue });
-            } else {
-                console.error('playSong: Remote song not found in queue:', song.title);
-                return;
-            }
+            // Add song to queue (for both local and remote files)
+            const newQueue = [...state.queue, song];
+            songIndex = newQueue.length - 1;
+            set({ queue: newQueue });
         }
 
         const updates: Partial<PlayerState> = {
@@ -565,6 +565,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             duration: 0,
             audioUrl: null,
         });
+    },
+
+    addListeningTime: async (seconds: number) => {
+        const newTotal = get().totalListeningTime + seconds;
+        set({ totalListeningTime: newTotal });
+        // Persist to storage
+        try {
+            await AsyncStorage.setItem(LISTENING_TIME_KEY, newTotal.toString());
+        } catch (error) {
+            console.error('Failed to save listening time:', error);
+        }
+    },
+
+    loadListeningTime: async () => {
+        try {
+            const stored = await AsyncStorage.getItem(LISTENING_TIME_KEY);
+            if (stored) {
+                set({ totalListeningTime: parseInt(stored, 10) || 0 });
+            }
+        } catch (error) {
+            console.error('Failed to load listening time:', error);
+        }
     },
 }));
 

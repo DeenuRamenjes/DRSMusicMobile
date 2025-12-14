@@ -71,8 +71,15 @@ export const PlaybackControls = () => {
 
   const progressPercent = duration ? (currentTime / duration) * 100 : 0;
 
+  // Dynamic styles based on compact mode
+  const containerHeight = compactMode ? DIMENSIONS.playbackHeightCompact : DIMENSIONS.playbackHeight;
+  const albumArtSize = compactMode ? 40 : 48;
+  const playButtonSize = compactMode ? 36 : 44;
+  const iconSize = compactMode ? 18 : 22;
+  const titleFontSize = compactMode ? FONT_SIZES.sm : FONT_SIZES.md;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { height: containerHeight }]}>
       {/* Progress Bar - at top of controls */}
       <TouchableOpacity
         ref={progressRef}
@@ -85,7 +92,7 @@ export const PlaybackControls = () => {
         </View>
       </TouchableOpacity>
 
-      <View style={styles.content}>
+      <View style={[styles.content, compactMode && { paddingVertical: SPACING.xs }]}>
         {/* Left: Song Info */}
         <TouchableOpacity
           onPress={handleOpenSongDetail}
@@ -96,46 +103,48 @@ export const PlaybackControls = () => {
             {currentSong.imageUrl ? (
               <Image
                 source={{ uri: getFullImageUrl(currentSong.imageUrl) }}
-                style={styles.albumArt}
+                style={[styles.albumArt, { width: albumArtSize, height: albumArtSize }]}
               />
             ) : (
-              <View style={[styles.albumArt, styles.albumArtPlaceholder]}>
-                <Icon name="music" size={20} color={COLORS.textMuted} />
+              <View style={[styles.albumArt, styles.albumArtPlaceholder, { width: albumArtSize, height: albumArtSize }]}>
+                <Icon name="music" size={compactMode ? 16 : 20} color={COLORS.textMuted} />
               </View>
             )}
           </View>
           <View style={styles.songDetails}>
-            <Text style={styles.songTitle} numberOfLines={1}>
+            <Text style={[styles.songTitle, { fontSize: titleFontSize }]} numberOfLines={1}>
               {currentSong.title}
             </Text>
-            <Text style={styles.songArtist} numberOfLines={1}>
-              {currentSong.artist}
-            </Text>
+            {!compactMode && (
+              <Text style={styles.songArtist} numberOfLines={1}>
+                {currentSong.artist}
+              </Text>
+            )}
           </View>
         </TouchableOpacity>
 
         {/* Center: Playback Controls */}
         <View style={styles.controls}>
-          <View style={styles.controlButtons}>
+          <View style={[styles.controlButtons, compactMode && { gap: SPACING.xs }]}>
 
             {/* Previous */}
             <TouchableOpacity
               onPress={playPrevious}
-              style={styles.controlButton}
+              style={[styles.controlButton, compactMode && { padding: SPACING.xs }]}
               activeOpacity={0.7}
             >
-              <Icon name="skip-back" size={22} color={COLORS.textPrimary} />
+              <Icon name="skip-back" size={iconSize} color={COLORS.textPrimary} />
             </TouchableOpacity>
 
             {/* Play/Pause */}
             <TouchableOpacity
               onPress={togglePlayPause}
-              style={[styles.playButton, { backgroundColor: themeColors.primary }]}
+              style={[styles.playButton, { backgroundColor: themeColors.primary, width: playButtonSize, height: playButtonSize, borderRadius: playButtonSize / 2 }]}
               activeOpacity={0.8}
             >
               <Icon 
                 name={isPlaying ? 'pause' : 'play'} 
-                size={22} 
+                size={iconSize} 
                 color={COLORS.textPrimary}
                 style={!isPlaying && styles.playIconOffset}
               />
@@ -144,10 +153,10 @@ export const PlaybackControls = () => {
             {/* Next */}
             <TouchableOpacity
               onPress={playNext}
-              style={styles.controlButton}
+              style={[styles.controlButton, compactMode && { padding: SPACING.xs }]}
               activeOpacity={0.7}
             >
-              <Icon name="skip-forward" size={22} color={COLORS.textPrimary} />
+              <Icon name="skip-forward" size={iconSize} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
         </View>

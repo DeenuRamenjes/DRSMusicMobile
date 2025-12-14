@@ -109,14 +109,14 @@ export const SongsScreen = () => {
           {/* Active indicator */}
           {isCurrentSong && (
             <View style={styles.activeIndicator}>
-              <View style={[styles.bar, { height: 16 }]} />
-              <View style={[styles.bar, { height: 12 }]} />
-              <View style={[styles.bar, { height: 20 }]} />
+              <View style={[styles.bar, { height: 16, backgroundColor: themeColors.primary }]} />
+              <View style={[styles.bar, { height: 12, backgroundColor: themeColors.primary }]} />
+              <View style={[styles.bar, { height: 20, backgroundColor: themeColors.primary }]} />
             </View>
           )}
         </View>
         <Text
-          style={[styles.gridTitle, isCurrentSong && styles.gridTitleActive]}
+          style={[styles.gridTitle, isCurrentSong && { color: themeColors.primary }]}
           numberOfLines={1}
         >
           {song.title}
@@ -142,9 +142,9 @@ export const SongsScreen = () => {
         <View style={styles.listNumber}>
           {isCurrentSong && isPlaying ? (
             <View style={styles.playingIndicator}>
-              <View style={[styles.playingBar, { height: 12 }]} />
-              <View style={[styles.playingBar, { height: 8 }]} />
-              <View style={[styles.playingBar, { height: 12 }]} />
+              <View style={[styles.playingBar, { height: 12, backgroundColor: themeColors.primary }]} />
+              <View style={[styles.playingBar, { height: 8, backgroundColor: themeColors.primary }]} />
+              <View style={[styles.playingBar, { height: 12, backgroundColor: themeColors.primary }]} />
             </View>
           ) : (
             <Text style={styles.listNumberText}>{index + 1}</Text>
@@ -164,7 +164,7 @@ export const SongsScreen = () => {
           </View>
           <View style={styles.listTextContainer}>
             <Text
-              style={[styles.listTitle, isCurrentSong && styles.listTitleActive]}
+              style={[styles.listTitle, isCurrentSong && { color: themeColors.primary }]}
               numberOfLines={1}
             >
               {song.title}

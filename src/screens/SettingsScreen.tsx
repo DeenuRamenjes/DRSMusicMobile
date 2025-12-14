@@ -95,14 +95,17 @@ const ColorPicker = ({ selected, onChange }: { selected: string; onChange: (colo
 const SelectOption = ({ 
   value, 
   options, 
-  onChange 
+  onChange,
+  themeColor,
 }: { 
   value: string; 
   options: { value: string; label: string }[]; 
   onChange: (v: string) => void;
+  themeColor?: string;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const currentLabel = options.find(o => o.value === value)?.label || value;
+  const activeColor = themeColor || COLORS.primary;
 
   return (
     <>
@@ -140,12 +143,12 @@ const SelectOption = ({
               >
                 <Text style={[
                   styles.selectModalOptionText,
-                  option.value === value && styles.selectModalOptionTextActive,
+                  option.value === value && { color: activeColor },
                 ]}>
                   {option.label}
                 </Text>
                 {option.value === value && (
-                  <Text style={styles.selectModalCheck}>✓</Text>
+                  <Text style={[styles.selectModalCheck, { color: activeColor }]}>✓</Text>
                 )}
               </TouchableOpacity>
             ))}
@@ -409,8 +412,8 @@ export const SettingsScreen = () => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Text style={styles.backIcon}>←</Text>
-          <Text style={styles.backText}>Back</Text>
+          <Text style={[styles.backIcon, { color: themeColors.primary }]}>←</Text>
+          <Text style={[styles.backText, { color: themeColors.primary }]}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={styles.headerRight}>
@@ -455,22 +458,23 @@ export const SettingsScreen = () => {
                 { value: 'high', label: 'High' },
               ]}
               onChange={(v) => update('audioQuality', v)}
+              themeColor={themeColors.primary}
             />
           </SettingItem>
           <SettingItem label="Shuffle">
-            <Toggle enabled={isShuffle} onChange={() => update('shuffle', !isShuffle)} />
+            <Toggle enabled={isShuffle} onChange={() => update('shuffle', !isShuffle)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Repeat">
-            <Toggle enabled={isLooping} onChange={() => update('loop', !isLooping)} />
+            <Toggle enabled={isLooping} onChange={() => update('loop', !isLooping)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Crossfade">
-            <Toggle enabled={settings.crossfade} onChange={() => update('crossfade', !settings.crossfade)} />
+            <Toggle enabled={settings.crossfade} onChange={() => update('crossfade', !settings.crossfade)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Gapless Playback">
-            <Toggle enabled={settings.gaplessPlayback} onChange={() => update('gaplessPlayback', !settings.gaplessPlayback)} />
+            <Toggle enabled={settings.gaplessPlayback} onChange={() => update('gaplessPlayback', !settings.gaplessPlayback)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Normalize Volume" border={false}>
-            <Toggle enabled={settings.normalizeVolume} onChange={() => update('normalizeVolume', !settings.normalizeVolume)} />
+            <Toggle enabled={settings.normalizeVolume} onChange={() => update('normalizeVolume', !settings.normalizeVolume)} themeColor={themeColors.primary} />
           </SettingItem>
         </Section>
 
@@ -481,7 +485,7 @@ export const SettingsScreen = () => {
             <ColorPicker selected={settings.accentColor} onChange={(c) => update('accentColor', c)} />
           </SettingItem>
           <SettingItem label="Compact Mode">
-            <Toggle enabled={settings.compactMode} onChange={() => update('compactMode', !settings.compactMode)} />
+            <Toggle enabled={settings.compactMode} onChange={() => update('compactMode', !settings.compactMode)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Layout" border={false}>
             <SelectOption
@@ -492,6 +496,7 @@ export const SettingsScreen = () => {
                 { value: 'comfortable', label: 'Comfortable' },
               ]}
               onChange={(v) => update('layout', v)}
+              themeColor={themeColors.primary}
             />
           </SettingItem>
         </Section>
@@ -505,7 +510,7 @@ export const SettingsScreen = () => {
           >
             <Text style={styles.settingLabel}>Offline Music</Text>
             <View style={styles.settingValue}>
-              <Text style={[styles.settingValueText, { color: COLORS.primary }]}>
+              <Text style={[styles.settingValueText, { color: themeColors.primary }]}>
                 Manage →
               </Text>
             </View>
@@ -519,13 +524,14 @@ export const SettingsScreen = () => {
                 { value: 'high', label: 'High' },
               ]}
               onChange={(v) => update('downloadQuality', v)}
+              themeColor={themeColors.primary}
             />
           </SettingItem>
           <SettingItem label="Wi-Fi Only">
-            <Toggle enabled={settings.downloadOverWifi} onChange={() => update('downloadOverWifi', !settings.downloadOverWifi)} />
+            <Toggle enabled={settings.downloadOverWifi} onChange={() => update('downloadOverWifi', !settings.downloadOverWifi)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Auto Download" border={false}>
-            <Toggle enabled={settings.autoDownload} onChange={() => update('autoDownload', !settings.autoDownload)} />
+            <Toggle enabled={settings.autoDownload} onChange={() => update('autoDownload', !settings.autoDownload)} themeColor={themeColors.primary} />
           </SettingItem>
         </Section>
 
@@ -541,13 +547,14 @@ export const SettingsScreen = () => {
                 { value: 'private', label: 'Private' },
               ]}
               onChange={(v) => update('profileVisibility', v)}
+              themeColor={themeColors.primary}
             />
           </SettingItem>
           <SettingItem label="Show Listening Activity">
-            <Toggle enabled={settings.showListeningActivity} onChange={() => update('showListeningActivity', !settings.showListeningActivity)} />
+            <Toggle enabled={settings.showListeningActivity} onChange={() => update('showListeningActivity', !settings.showListeningActivity)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Allow Friend Requests" border={false}>
-            <Toggle enabled={settings.allowFriendRequests} onChange={() => update('allowFriendRequests', !settings.allowFriendRequests)} />
+            <Toggle enabled={settings.allowFriendRequests} onChange={() => update('allowFriendRequests', !settings.allowFriendRequests)} themeColor={themeColors.primary} />
           </SettingItem>
         </Section>
 
@@ -555,16 +562,16 @@ export const SettingsScreen = () => {
         <SectionHeader icon="🔔" title="NOTIFICATIONS" />
         <Section>
           <SettingItem label="Email Notifications">
-            <Toggle enabled={settings.emailNotifications} onChange={() => update('emailNotifications', !settings.emailNotifications)} />
+            <Toggle enabled={settings.emailNotifications} onChange={() => update('emailNotifications', !settings.emailNotifications)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Push Notifications">
-            <Toggle enabled={settings.pushNotifications} onChange={() => update('pushNotifications', !settings.pushNotifications)} />
+            <Toggle enabled={settings.pushNotifications} onChange={() => update('pushNotifications', !settings.pushNotifications)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="New Releases">
-            <Toggle enabled={settings.newReleases} onChange={() => update('newReleases', !settings.newReleases)} />
+            <Toggle enabled={settings.newReleases} onChange={() => update('newReleases', !settings.newReleases)} themeColor={themeColors.primary} />
           </SettingItem>
           <SettingItem label="Friend Activity" border={false}>
-            <Toggle enabled={settings.friendActivity} onChange={() => update('friendActivity', !settings.friendActivity)} />
+            <Toggle enabled={settings.friendActivity} onChange={() => update('friendActivity', !settings.friendActivity)} themeColor={themeColors.primary} />
           </SettingItem>
         </Section>
 
