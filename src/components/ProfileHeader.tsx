@@ -87,10 +87,10 @@ const ProfileHeader = () => {
     const server = BACKEND_SERVERS.find(s => s.id === serverId);
     showConfirm(
       'Switch Server',
-      `Switch to ${server?.name}? This requires restarting the app.`,
+      `Switch to ${server?.name}?`,
       async () => {
         await setSelectedServer(serverId);
-        showError('Server Changed', 'Please restart the app for changes to take effect.');
+        // showError('Server Changed', 'Please restart the app for changes to take effect.');
       },
       'Switch',
       false

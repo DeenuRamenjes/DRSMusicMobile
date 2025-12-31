@@ -33,11 +33,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
 
 // Login Banner Component for unauthenticated users
-const LoginBanner = ({ 
-  themeColors, 
-  onLogin 
-}: { 
-  themeColors: { primary: string }; 
+const LoginBanner = ({
+  themeColors,
+  onLogin
+}: {
+  themeColors: { primary: string };
   onLogin: () => void;
 }) => {
   return (
@@ -75,7 +75,7 @@ const FeaturedSection = () => {
   const { featuredSongs, isLoading, error } = useMusicStore();
   const { currentSong, isPlaying, playSong, pauseSong, playAlbum } =
     usePlayerStore();
-  const { colors: themeColors } = useThemeStore();
+  const { colors: themeColors, dimensions: themeDimensions, spacing: themeSpacing, compactMode } = useThemeStore();
 
   const playFromFeatured = (song: Song, index: number) => {
     if (currentSong?._id === song._id) {
@@ -219,7 +219,7 @@ const SectionGrid = ({
   const navigation = useNavigation();
   const { currentSong, isPlaying, playSong, pauseSong, playAlbum } =
     usePlayerStore();
-  const { colors: themeColors } = useThemeStore();
+  const { colors: themeColors, dimensions: themeDimensions, spacing: themeSpacing, compactMode } = useThemeStore();
 
   const maxVisibleCards = 4; // 2x2 grid on mobile
   const visibleSongs = songs.slice(0, maxVisibleCards);
@@ -371,7 +371,7 @@ const OfflineModeView = () => {
     loadDownloadedSongs,
   } = useOfflineMusicStore();
   const { currentSong, isPlaying } = usePlayerStore();
-  const { colors: themeColors } = useThemeStore();
+  const { colors: themeColors, dimensions: themeDimensions, spacing: themeSpacing, compactMode } = useThemeStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const allOfflineSongs = [...downloadedSongs, ...deviceSongs];
@@ -664,7 +664,7 @@ export const HomeScreen = () => {
         setInitialLoading(false);
       }
     };
-    
+
     fetchSongs();
 
     return () => clearTimeout(loadingTimeout);
@@ -749,7 +749,7 @@ export const HomeScreen = () => {
 
   return (
     <View style={styles.screenContainer}>
-      <ProfileHeader/>
+      <ProfileHeader />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}

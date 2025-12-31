@@ -423,6 +423,17 @@ export const ChatScreen = () => {
 
         {/* Message Input - WhatsApp Style */}
         <View style={styles.inputContainer}>
+           <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: themeColors.primary }]}
+            onPress={() => setShowSongPicker(true)}
+          >
+            <Icon
+              name="music"
+              size={20}
+              color={COLORS.textPrimary}
+            />
+          </TouchableOpacity>
+
           <View style={styles.inputWrapper}>
             <TouchableOpacity style={styles.emojiButton}>
               <Icon name="smile" size={22} color={COLORS.textMuted} />
@@ -448,18 +459,6 @@ export const ChatScreen = () => {
             />
           </TouchableOpacity>
           </View>
-
-           <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: themeColors.primary }]}
-            onPress={() => setShowSongPicker(true)}
-          >
-            <Icon
-              name="music"
-              size={20}
-              color={COLORS.textPrimary}
-            />
-          </TouchableOpacity>
-
         </View>
       </KeyboardAvoidingView>
 

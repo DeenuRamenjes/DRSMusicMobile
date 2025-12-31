@@ -35,7 +35,7 @@ export const SongsScreen = () => {
   const { songs, isLoading, fetchSongs } = useMusicStore();
   const { currentSong, isPlaying, playSong, pauseSong, setQueue } = usePlayerStore();
   const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
-  const { colors: themeColors } = useThemeStore();
+  const { colors: themeColors, dimensions: themeDimensions, spacing: themeSpacing, fontSizes: themeFontSizes, compactMode } = useThemeStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filteredSongs, setFilteredSongs] = useState<Song[]>([]);
 
@@ -99,9 +99,9 @@ export const SongsScreen = () => {
             ]}
             onPress={() => handlePlayPause(song)}
           >
-            <Icon 
-              name={isCurrentSong && isPlaying ? 'pause' : 'play'} 
-              size={16} 
+            <Icon
+              name={isCurrentSong && isPlaying ? 'pause' : 'play'}
+              size={16}
               color="#fff"
               style={!(isCurrentSong && isPlaying) && { marginLeft: 2 }}
             />
@@ -134,7 +134,7 @@ export const SongsScreen = () => {
 
     return (
       <TouchableOpacity
-        style={styles.listItem}
+        style={[styles.listItem, { height: themeDimensions.songCardHeight, paddingVertical: themeSpacing.sm }]}
         onPress={() => handlePlayPause(song)}
         activeOpacity={0.7}
       >
@@ -153,10 +153,10 @@ export const SongsScreen = () => {
 
         {/* Song Info */}
         <View style={styles.listSongInfo}>
-          <View style={styles.listImageContainer}>
+          <View style={[styles.listImageContainer, { width: themeDimensions.listImageSize, height: themeDimensions.listImageSize }]}>
             <Image
               source={{ uri: getFullImageUrl(song.imageUrl) }}
-              style={styles.listImage}
+              style={[styles.listImage, { width: themeDimensions.listImageSize, height: themeDimensions.listImageSize }]}
             />
             {song.isLiked && (
               <Text style={styles.listLikeIcon}>❤️</Text>
@@ -201,7 +201,7 @@ export const SongsScreen = () => {
 
   return (
     <View style={styles.container}>
-      <ProfileHeader/>
+      <ProfileHeader />
       {/* Hero Header */}
       <View style={styles.heroContainer}>
         <LinearGradient
@@ -210,7 +210,7 @@ export const SongsScreen = () => {
         />
         <View style={styles.headerContainer}>
           <Text style={styles.headerTitle}>All Songs</Text>
-          
+
           {/* View Toggle */}
           <View style={styles.viewToggle}>
             <TouchableOpacity
@@ -255,7 +255,7 @@ export const SongsScreen = () => {
             <Text style={styles.listHeaderTitle}>Title</Text>
             <Text style={styles.listHeaderDuration}>⏱</Text>
           </View>
-          
+
           <FlatList
             key="list-view"
             data={filteredSongs}

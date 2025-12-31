@@ -395,7 +395,10 @@ export const SongDetailScreen = () => {
       <View style={styles.queueItemWrapper}>
         <TouchableOpacity
           style={styles.queueItem}
-          onPress={() => handlePlayFromQueue(item)}
+          onPress={() => {
+            setQueueItemMenuId(null); // Close any open menu
+            handlePlayFromQueue(item);
+          }}
           onLongPress={() => setQueueItemMenuId(isMenuVisible ? null : item._id)}
           activeOpacity={0.7}
         >
@@ -775,7 +778,10 @@ export const SongDetailScreen = () => {
             <TouchableOpacity
               style={styles.modalBackdrop}
               activeOpacity={1}
-              onPress={() => setIsQueueOpen(false)}
+              onPress={() => {
+                setQueueItemMenuId(null);
+                setIsQueueOpen(false);
+              }}
             />
             <View style={styles.queuePanel}>
               {/* Queue Header */}
@@ -788,7 +794,10 @@ export const SongDetailScreen = () => {
                 </View>
                 <TouchableOpacity
                   style={styles.queueCloseButton}
-                  onPress={() => setIsQueueOpen(false)}
+                  onPress={() => {
+                    setQueueItemMenuId(null);
+                    setIsQueueOpen(false);
+                  }}
 
                 >
                   <Text style={styles.queueCloseText}>Close</Text>
@@ -805,6 +814,7 @@ export const SongDetailScreen = () => {
                   style={styles.queueList}
                   contentContainerStyle={styles.queueListContent}
                   showsVerticalScrollIndicator={false}
+                  onScrollBeginDrag={() => setQueueItemMenuId(null)}
                 />
               ) : (
                 <View style={styles.emptyQueue}>

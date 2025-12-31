@@ -31,7 +31,7 @@ const formatDuration = (duration: number) => {
 // Album Card Component
 const AlbumCard = ({ album, onPress }: { album: Album; onPress: () => void }) => {
   const { currentSong, isPlaying } = usePlayerStore();
-  const { colors: themeColors } = useThemeStore();
+  const { colors: themeColors, dimensions: themeDimensions, compactMode } = useThemeStore();
   const isCurrentAlbumPlaying = album.songs?.some(s => s._id === currentSong?._id) && isPlaying;
 
   return (
@@ -46,10 +46,10 @@ const AlbumCard = ({ album, onPress }: { album: Album; onPress: () => void }) =>
           style={styles.albumImage}
         />
         <View style={[styles.albumPlayButton, { backgroundColor: themeColors.primary }]}>
-          <Icon 
-            name={isCurrentAlbumPlaying ? 'pause' : 'play'} 
-            size={16} 
-            color="#fff" 
+          <Icon
+            name={isCurrentAlbumPlaying ? 'pause' : 'play'}
+            size={16}
+            color="#fff"
             style={!isCurrentAlbumPlaying && { marginLeft: 2 }}
           />
         </View>
@@ -104,7 +104,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
 
   return (
     <View style={styles.detailContainer}>
-      <ScrollView 
+      <ScrollView
         style={styles.detailScroll}
         showsVerticalScrollIndicator={false}
       >
@@ -113,7 +113,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
           colors={[`${themeColors.primary}CC`, 'rgba(24, 24, 27, 0.8)', COLORS.background]}
           style={styles.detailGradient}
         />
-        
+
         {/* Content */}
         <View style={styles.detailContent}>
           {/* Album Header */}
@@ -142,9 +142,9 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
               onPress={handlePlayAlbum}
               activeOpacity={0.8}
             >
-              <Icon 
-                name={isCurrentAlbumPlaying ? 'pause' : 'play'} 
-                size={28} 
+              <Icon
+                name={isCurrentAlbumPlaying ? 'pause' : 'play'}
+                size={28}
                 color={COLORS.background}
                 style={!isCurrentAlbumPlaying && { marginLeft: 3 }}
               />
@@ -184,7 +184,7 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
                       style={styles.songImage}
                     />
                     <View style={styles.songTextContainer}>
-                      <Text 
+                      <Text
                         style={[styles.songTitle, isCurrentSong && { color: themeColors.primary }]}
                         numberOfLines={1}
                       >

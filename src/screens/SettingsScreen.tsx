@@ -243,10 +243,10 @@ export const SettingsScreen = () => {
     const server = BACKEND_SERVERS.find(s => s.id === serverId);
     showConfirm(
       'Switch Server',
-      `Switch to ${server?.name}? This requires restarting the app.`,
+      `Switch to ${server?.name}?`,
       async () => {
         await setSelectedServer(serverId);
-        showError('Server Changed', 'Please restart the app for changes to take effect.');
+        // showError('Server Changed', 'Please restart the app for changes to take effect.');
       },
       'Switch',
       false
@@ -513,9 +513,9 @@ export const SettingsScreen = () => {
           <SettingItem label="Crossfade">
             <Toggle enabled={settings.crossfade} onChange={() => update('crossfade', !settings.crossfade)} themeColor={themeColors.primary} />
           </SettingItem>
-          <SettingItem label="Gapless Playback" border={false}>
+          {/* <SettingItem label="Gapless Playback" border={false}>
             <Toggle enabled={settings.gaplessPlayback} onChange={() => update('gaplessPlayback', !settings.gaplessPlayback)} themeColor={themeColors.primary} />
-          </SettingItem>
+          </SettingItem> */}
           {/* <SettingItem label="Normalize Volume" border={false}>
             <Toggle enabled={settings.normalizeVolume} onChange={() => update('normalizeVolume', !settings.normalizeVolume)} themeColor={themeColors.primary} />
           </SettingItem> */}
@@ -608,7 +608,8 @@ export const SettingsScreen = () => {
               {/* Band Sliders */}
               <View style={styles.eqBandsContainer}>
                 {EQ_BANDS.map((band) => {
-                  const value = customBands[band.id];
+                  const bandValues = getBandValues();
+                  const value = bandValues[band.id];
                   return (
                     <View key={band.id} style={styles.eqBandColumn}>
                       <Text style={styles.eqBandValue}>
@@ -1241,33 +1242,33 @@ const styles = StyleSheet.create({
   },
   eqBandsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: SPACING.md,
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xs,
     paddingVertical: SPACING.lg,
   },
   eqBandColumn: {
     alignItems: 'center',
-    width: 60,
+    width: 32,
   },
   eqBandValue: {
-    fontSize: FONT_SIZES.sm,
+    fontSize: 10,
     fontWeight: '600',
     color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   eqSliderContainer: {
-    height: 150,
+    height: 120,
     justifyContent: 'center',
   },
   eqSlider: {
-    width: 150,
-    height: 40,
+    width: 120,
+    height: 32,
     transform: [{ rotate: '-90deg' }],
   },
   eqBandLabel: {
-    fontSize: FONT_SIZES.xs,
+    fontSize: 9,
     color: COLORS.textMuted,
-    marginTop: SPACING.sm,
+    marginTop: SPACING.xs,
   },
   eqDbLabels: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ import android.media.AudioManager
 import android.media.audiofx.Equalizer
 import android.util.Log
 import com.facebook.react.bridge.*
+import android.os.Build
 
 class EqualizerModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -25,32 +26,51 @@ class EqualizerModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
             // Release any existing equalizer
             releaseInternal()
             
-            // If sessionId is 0, try to get a valid audio session from AudioManager
-            audioSessionId = if (sessionId == 0) {
-                val audioManager = reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                // Generate a new audio session ID
-                audioManager.generateAudioSessionId()
-            } else {
-                sessionId
+            val audioManager = reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            
+            // Strategy: Try multiple approaches to get a working equalizer
+            // Priority 0 = normal apps, Priority 1000 = system/higher priority
+            
+            val sessionIdsToTry = mutableListOf<Pair<Int, Int>>() // Pair<sessionId, priority>
+            
+            // 1. If a specific session was provided, try it first
+            if (sessionId > 0) {
+                sessionIdsToTry.add(Pair(sessionId, 0))
             }
             
-            Log.d(TAG, "Attempting to initialize equalizer with session: $audioSessionId")
+            // 2. Try session 0 with high priority (system-wide output mix)
+            // This applies to all audio output on the device
+            sessionIdsToTry.add(Pair(0, 1000))
+            sessionIdsToTry.add(Pair(0, 0))
             
-            // Try to create equalizer with priority 0 (normal priority)
-            equalizer = try {
-                Equalizer(0, audioSessionId)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed with generated session, trying with 0: ${e.message}")
-                // Fallback: try with session 0 (global output mix - requires API 21+)
+            // 3. Generate a new session ID and try
+            val generatedSession = audioManager.generateAudioSessionId()
+            sessionIdsToTry.add(Pair(generatedSession, 0))
+            
+            var lastError: Exception? = null
+            
+            for ((trySessionId, priority) in sessionIdsToTry) {
                 try {
-                    Equalizer(1000, 0) // Higher priority for global
-                } catch (e2: Exception) {
-                    Log.e(TAG, "All equalizer init attempts failed: ${e2.message}")
-                    throw e2
+                    Log.d(TAG, "Trying to create equalizer with session: $trySessionId, priority: $priority")
+                    equalizer = Equalizer(priority, trySessionId)
+                    audioSessionId = trySessionId
+                    equalizer?.enabled = true // Enable immediately to verify it works
+                    equalizer?.enabled = pendingEnabled
+                    
+                    Log.d(TAG, "SUCCESS: Equalizer created with session: $trySessionId")
+                    break
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed with session $trySessionId, priority $priority: ${e.message}")
+                    lastError = e
+                    equalizer = null
                 }
             }
             
-            equalizer?.enabled = pendingEnabled
+            if (equalizer == null) {
+                Log.e(TAG, "All equalizer initialization attempts failed")
+                throw lastError ?: Exception("Failed to create equalizer")
+            }
+            
             isInitialized = true
             
             // Apply any pending band levels
@@ -119,6 +139,7 @@ class EqualizerModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
         for (i in 0 until minOf(levels.size, numberOfBands)) {
             val clampedLevel = levels[i].coerceIn(minLevel.toInt(), maxLevel.toInt()).toShort()
             equalizer?.setBandLevel(i.toShort(), clampedLevel)
+            Log.d(TAG, "Applied band $i level: $clampedLevel")
         }
     }
 
@@ -231,6 +252,21 @@ class EqualizerModule(reactContext: ReactApplicationContext) : ReactContextBaseJ
     @ReactMethod
     fun isAvailable(promise: Promise) {
         promise.resolve(true)
+    }
+    
+    // Check if equalizer is currently working
+    @ReactMethod
+    fun getStatus(promise: Promise) {
+        try {
+            val result = Arguments.createMap()
+            result.putBoolean("isInitialized", isInitialized)
+            result.putInt("audioSessionId", audioSessionId)
+            result.putBoolean("isEnabled", equalizer?.enabled ?: false)
+            result.putInt("numberOfBands", equalizer?.numberOfBands?.toInt() ?: 0)
+            promise.resolve(result)
+        } catch (e: Exception) {
+            promise.reject("ERROR", e.message)
+        }
     }
 
     override fun invalidate() {
