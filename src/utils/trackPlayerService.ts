@@ -1,9 +1,6 @@
 import TrackPlayer, { Event } from 'react-native-track-player';
 import { usePlayerStore } from '../store/usePlayerStore';
 
-// Debounce tracking for playNext to prevent double triggering
-let lastPlayNextTime = 0;
-
 /**
  * TrackPlayer Playback Service
  * This runs as a headless task for background audio playback
@@ -70,17 +67,8 @@ export default async function playbackService(): Promise<void> {
         }
     });
 
-    // Handle playback queue ended - for BACKGROUND playback
-    TrackPlayer.addEventListener(Event.PlaybackQueueEnded, (event) => {
-        // Debounce: Only trigger if more than 500ms since last trigger
-        const now = Date.now();
-        if (now - lastPlayNextTime < 500) {
-            return;
-        }
-        lastPlayNextTime = now;
-
-        usePlayerStore.getState().playNext();
-    });
+    // NOTE: PlaybackQueueEnded is handled in AudioPlayer.tsx component
+    // Do NOT handle it here as well - it causes double triggering and song skipping
 
     // Handle playback state changes - LOGGING ONLY
     // We do NOT sync state to store here - the store is the source of truth

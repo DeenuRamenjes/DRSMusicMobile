@@ -18,17 +18,18 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
+import axiosInstance from '../api/axios';
 
 // Stat Card Component
-const StatCard = ({ 
-  icon, 
-  value, 
-  label, 
-  color 
-}: { 
-  icon: string; 
-  value: string | number; 
-  label: string; 
+const StatCard = ({
+  icon,
+  value,
+  label,
+  color
+}: {
+  icon: string;
+  value: string | number;
+  label: string;
   color: string;
 }) => {
   const colorStyles: Record<string, { gradient: string[] }> = {
@@ -67,12 +68,31 @@ export const ProfileScreen = () => {
   const { currentSong, isPlaying, playSong, pauseSong, totalListeningTime, loadListeningTime } = usePlayerStore();
   const { user, isAuthenticated } = useAuthStore();
   const { colors: themeColors } = useThemeStore();
-  
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const [stats, setStats] = useState({
     totalSongs: 0,
     totalAlbums: 0,
     likedCount: 0,
   });
+
+
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      try {
+        await axiosInstance.get('/admin/check');
+        setIsAdmin(true);
+      } catch (error) {
+        setIsAdmin(false);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
 
   useEffect(() => {
     if (!likedSongsInitialized && !likedSongsLoading) {
@@ -111,7 +131,7 @@ export const ProfileScreen = () => {
   }
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
@@ -123,7 +143,7 @@ export const ProfileScreen = () => {
           colors={[`${themeColors.primary}4D`, `${themeColors.primary}1A`, 'transparent']}
           style={styles.heroGradient}
         />
-        
+
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           {/* Avatar */}
@@ -146,7 +166,10 @@ export const ProfileScreen = () => {
 
           {/* Profile Info */}
           <View style={styles.profileInfo}>
-            <Text style={styles.profileLabel}>Profile</Text>
+            {/* <Text style={styles.profileLabel}>Profile</Text> */}
+            {isAdmin && (
+              <Text style={styles.adminText}>Admin</Text>
+            )}
             <Text style={styles.profileName}>{user.fullName || user.username || 'Music Lover'}</Text>
             <View style={styles.profileMeta}>
               <View style={styles.metaItem}>
@@ -169,15 +192,15 @@ export const ProfileScreen = () => {
           <StatCard icon="🎵" value={stats.totalSongs} label="Songs" color="emerald" />
           <StatCard icon="💿" value={stats.totalAlbums} label="Albums" color="blue" />
           <StatCard icon="❤️" value={stats.likedCount} label="Liked" color="pink" />
-          <StatCard 
-            icon="⏱️" 
+          <StatCard
+            icon="⏱️"
             value={
-              totalListeningTime >= 3600 
+              totalListeningTime >= 3600
                 ? `${Math.floor(totalListeningTime / 3600)}h ${Math.floor((totalListeningTime % 3600) / 60)}m`
                 : `${Math.floor(totalListeningTime / 60)}m`
-            } 
-            label="Listen Time" 
-            color="purple" 
+            }
+            label="Listen Time"
+            color="purple"
           />
         </View>
       </View>
@@ -201,9 +224,9 @@ export const ProfileScreen = () => {
                   style={styles.nowPlayingImage}
                 />
                 <View style={[styles.nowPlayingOverlay, { backgroundColor: themeColors.primary }]}>
-                  <Icon 
-                    name={isPlaying ? 'pause' : 'play'} 
-                    size={24} 
+                  <Icon
+                    name={isPlaying ? 'pause' : 'play'}
+                    size={24}
                     color="#fff"
                     style={!isPlaying && { marginLeft: 3 }}
                   />
@@ -243,7 +266,7 @@ export const ProfileScreen = () => {
             </TouchableOpacity>
           )}
         </View>
-        
+
         {likedSongs.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>❤️</Text>
@@ -265,9 +288,9 @@ export const ProfileScreen = () => {
                     style={styles.likedSongImage}
                   />
                   <View style={[styles.likedSongOverlay, { backgroundColor: themeColors.primary }]}>
-                    <Icon 
-                      name={currentSong?._id === song._id && isPlaying ? 'pause' : 'play'} 
-                      size={18} 
+                    <Icon
+                      name={currentSong?._id === song._id && isPlaying ? 'pause' : 'play'}
+                      size={18}
                       color="#fff"
                       style={!(currentSong?._id === song._id && isPlaying) && { marginLeft: 2 }}
                     />
@@ -309,7 +332,7 @@ export const ProfileScreen = () => {
             <Text style={styles.seeAllText}>Browse all</Text>
           </TouchableOpacity>
         </View>
-        
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -431,6 +454,15 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     alignItems: 'center',
+  },
+  adminText: {
+    fontSize: FONT_SIZES.md,
+    color: '#fff',
+    marginLeft: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: COLORS.zinc900,
   },
   profileLabel: {
     fontSize: FONT_SIZES.sm,

@@ -11,6 +11,7 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { getFullImageUrl, useBackendStore, BACKEND_SERVERS, USE_DEPLOYMENT } from '../config';
 import { CustomDialog, useDialog } from './CustomDialog';
+import axiosInstance from '../api/axios';
 
 const DRSLogo = require('../assets/DRS-Logo.png');
 
@@ -24,14 +25,33 @@ const ProfileHeader = () => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [serverMenuVisible, setServerMenuVisible] = useState(false);
   const { searchSongs } = useMusicStore();
+  const [isAdmin, setIsAdmin] = useState(false);
   const { colors: themeColors } = useThemeStore();
   const { currentSong, isPlaying, playSong } = usePlayerStore();
-  const { selectedServerId, setSelectedServer, loadSelectedServer } = useBackendStore();
+  const { selectedServerId, setSelectedServer, loadSelectedServer, serverHealthStatus, checkServerHealth, checkAllServersHealth } = useBackendStore();
   const { dialogState, hideDialog, showError, showConfirm } = useDialog();
+
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      try {
+        await axiosInstance.get('/admin/check');
+        setIsAdmin(true);
+      } catch (error) {
+        setIsAdmin(false);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
 
   // Load server preference on mount
   useEffect(() => {
     loadSelectedServer();
+    checkAllServersHealth();
   }, []);
 
   const handleLogout = () => {
@@ -60,10 +80,10 @@ const ProfileHeader = () => {
       setServerMenuVisible(false);
       return;
     }
-    
+
     setServerMenuVisible(false);
     setMenuVisible(false);
-    
+
     const server = BACKEND_SERVERS.find(s => s.id === serverId);
     showConfirm(
       'Switch Server',
@@ -126,6 +146,9 @@ const ProfileHeader = () => {
           <View style={styles.topBarLeft}>
             <Image source={DRSLogo} style={styles.logo} resizeMode="contain" />
             <Text style={styles.logoText}>DRS Music</Text>
+            {isAdmin && (
+              <Text style={styles.adminText}>Admin</Text>
+            )}
           </View>
 
           {/* Right: Search and Profile */}
@@ -137,7 +160,7 @@ const ProfileHeader = () => {
               <Icon name="search" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.profileButton}
               onPress={() => setMenuVisible(true)}
             >
@@ -265,7 +288,7 @@ const ProfileHeader = () => {
 
             {/* Menu Items */}
             <View style={styles.menuItems}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.menuItem}
                 onPress={handleNavigateToProfile}
               >
@@ -274,7 +297,7 @@ const ProfileHeader = () => {
                 <FeatherIcon name="chevron-right" size={18} color={COLORS.textMuted} />
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.menuItem}
                 onPress={handleNavigateToSettings}
               >
@@ -285,7 +308,7 @@ const ProfileHeader = () => {
 
               {/* Server Selection - Only show when USE_DEPLOYMENT is true */}
               {USE_DEPLOYMENT && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => setServerMenuVisible(true)}
                 >
@@ -300,7 +323,7 @@ const ProfileHeader = () => {
 
               <View style={styles.menuDivider} />
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.menuItem}
                 onPress={handleLogout}
               >
@@ -325,19 +348,59 @@ const ProfileHeader = () => {
               <Text style={styles.serverMenuTitle}>Select Server</Text>
               {BACKEND_SERVERS.map((server) => {
                 const isSelected = selectedServerId === server.id;
+                const healthStatus = serverHealthStatus[server.id] || 'unknown';
+
+                const getHealthBadge = () => {
+                  switch (healthStatus) {
+                    case 'online':
+                      return { color: '#10b981', text: 'Online', icon: '●' };
+                    case 'offline':
+                      return { color: '#ef4444', text: 'Offline', icon: '●' };
+                    case 'checking':
+                      return { color: '#f59e0b', text: 'Checking...', icon: '○' };
+                    default:
+                      return { color: COLORS.textMuted, text: '', icon: '' };
+                  }
+                };
+                const badge = getHealthBadge();
+
                 return (
                   <TouchableOpacity
                     key={server.id}
                     style={[styles.serverOption, isSelected && styles.serverOptionSelected]}
                     onPress={() => handleServerSwitch(server.id)}
+                    onLongPress={() => checkServerHealth(server.id)}
                   >
                     <View style={styles.serverOptionInfo}>
-                      <Text style={[styles.serverOptionName, isSelected && { color: themeColors.primary }]}>
-                        {server.name}
-                      </Text>
-                      {server.description && (
-                        <Text style={styles.serverOptionDesc}>{server.description}</Text>
-                      )}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.serverOptionName, isSelected && { color: themeColors.primary }]}>
+                          {server.name}
+                        </Text>
+                        {isSelected && (
+                          <View style={{
+                            backgroundColor: themeColors.primaryMuted,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 8
+                          }}>
+                            <Text style={{ fontSize: 9, color: themeColors.primary, fontWeight: '600' }}>ACTIVE</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                        {badge.text && (
+                          <>
+                            <Text style={{ color: badge.color, fontSize: 8 }}>{badge.icon}</Text>
+                            <Text style={{ color: badge.color, fontSize: 11 }}>{badge.text}</Text>
+                          </>
+                        )}
+                        {server.description && badge.text && (
+                          <Text style={{ color: COLORS.textMuted, fontSize: 11 }}> • </Text>
+                        )}
+                        {server.description && (
+                          <Text style={styles.serverOptionDesc}>{server.description}</Text>
+                        )}
+                      </View>
                     </View>
                     {isSelected && (
                       <FeatherIcon name="check" size={20} color={themeColors.primary} />
@@ -345,6 +408,13 @@ const ProfileHeader = () => {
                   </TouchableOpacity>
                 );
               })}
+              {/* Refresh button */}
+              <TouchableOpacity
+                style={{ alignItems: 'center', paddingVertical: SPACING.sm, marginTop: SPACING.xs }}
+                onPress={checkAllServersHealth}
+              >
+                <Text style={{ color: themeColors.primary, fontSize: 12 }}>↻ Refresh Status</Text>
+              </TouchableOpacity>
             </View>
           </Pressable>
         </Modal>
@@ -407,6 +477,15 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     overflow: 'hidden',
+  },
+  adminText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.zinc400,
+    marginLeft: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: COLORS.zinc900,
   },
   profileImage: {
     width: '100%',
@@ -586,8 +665,8 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
   },
   serverNameText: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.textMuted,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textPrimary,
     marginTop: 2,
   },
   serverMenuContainer: {

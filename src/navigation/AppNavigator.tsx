@@ -18,6 +18,7 @@ import { CreateAlbumScreen } from '../screens/CreateAlbumScreen';
 import { EditAlbumScreen } from '../screens/EditAlbumScreen';
 import { EditSongScreen } from '../screens/EditSongScreen';
 import { TodoScreen } from '../screens/TodoScreen';
+import { AdminAccessScreen } from '../screens/AdminAccessScreen';
 import { ConnectionScreen } from '../components/ConnectionScreen';
 import { SplashScreen } from '../components/SplashScreen';
 import { useAuthStore } from '../store/useAuthStore';
@@ -44,12 +45,12 @@ export const AppNavigator = () => {
     const init = async () => {
       loadTheme(); // Load theme settings from storage
       loadDownloadedSongs(); // Load offline songs
-      
+
       // Always check connection to backend
       const connected = await checkConnection();
       setInitialCheckDone(true);
       setConnectionFailed(!connected);
-      
+
       // If connected, check auth with a timeout
       if (connected) {
         // Safety timeout - if auth takes longer than 15 seconds, force stop loading
@@ -58,7 +59,7 @@ export const AppNavigator = () => {
           useAuthStore.getState().setIsLoading(false);
           setAuthTimedOut(true);
         }, 15000); // 15 second timeout
-        
+
         try {
           await checkAuth();
         } catch (error) {
@@ -68,7 +69,7 @@ export const AppNavigator = () => {
         }
       }
     };
-    
+
     init();
   }, []);
 
@@ -86,7 +87,7 @@ export const AppNavigator = () => {
         console.warn('Secondary safety timeout - forcing isLoading to false');
         useAuthStore.getState().setIsLoading(false);
       }, 10000); // 10 seconds after splash completes
-      
+
       return () => clearTimeout(safetyTimeout);
     }
   }, [initialCheckDone, splashAnimationComplete, isLoading, useOffline]);
@@ -103,8 +104,8 @@ export const AppNavigator = () => {
     return (
       <>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <SplashScreen 
-          message={initialCheckDone ? "Ready!" : "Connecting to server..."} 
+        <SplashScreen
+          message={initialCheckDone ? "Ready!" : "Connecting to server..."}
           onAnimationComplete={() => setSplashAnimationComplete(true)}
         />
       </>
@@ -116,7 +117,7 @@ export const AppNavigator = () => {
     return (
       <>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <ConnectionScreen 
+        <ConnectionScreen
           onRetry={() => {
             checkConnection().then((connected) => {
               if (connected) {
@@ -126,7 +127,7 @@ export const AppNavigator = () => {
                   // If auth takes too long, force set isLoading to false
                   useAuthStore.getState().setIsLoading(false);
                 }, 20000); // 20 second timeout for auth
-                
+
                 checkAuth().finally(() => clearTimeout(authTimeout));
               }
             });
@@ -161,111 +162,118 @@ export const AppNavigator = () => {
         }}
         initialRouteName={initialRoute}
       >
-        <Stack.Screen 
-          name="Landing" 
+        <Stack.Screen
+          name="Landing"
           component={LandingScreen}
-          options={{ 
+          options={{
             animationTypeForReplace: 'pop',
             // Disable swipe back gesture on landing screen to prevent accidental exit
             gestureEnabled: false,
           }}
         />
-        <Stack.Screen 
-          name="MainLayout" 
+        <Stack.Screen
+          name="MainLayout"
           component={MainLayout}
           options={{
             // Disable swipe back gesture on main screen to prevent accidental exit
             gestureEnabled: false,
           }}
         />
-        <Stack.Screen 
-          name="SongDetail" 
+        <Stack.Screen
+          name="SongDetail"
           component={SongDetailScreen}
           options={{
             presentation: 'modal',
             gestureDirection: 'vertical',
           }}
         />
-        <Stack.Screen 
-          name="Messages" 
+        <Stack.Screen
+          name="Messages"
           component={MessagesScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="Chat" 
+        <Stack.Screen
+          name="Chat"
           component={ChatScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="OfflineMusic" 
+        <Stack.Screen
+          name="OfflineMusic"
           component={OfflineMusicScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="Admin" 
+        <Stack.Screen
+          name="Admin"
           component={AdminScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="ManageSongs" 
+        <Stack.Screen
+          name="ManageSongs"
           component={ManageSongsScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="UploadSong" 
+        <Stack.Screen
+          name="UploadSong"
           component={UploadSongScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="ManageAlbums" 
+        <Stack.Screen
+          name="ManageAlbums"
           component={ManageAlbumsScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="ManageUsers" 
+        <Stack.Screen
+          name="ManageUsers"
           component={ManageUsersScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="CreateAlbum" 
+        <Stack.Screen
+          name="CreateAlbum"
           component={CreateAlbumScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="EditAlbum" 
+        <Stack.Screen
+          name="EditAlbum"
           component={EditAlbumScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="EditSong" 
+        <Stack.Screen
+          name="EditSong"
           component={EditSongScreen}
           options={{
             gestureDirection: 'horizontal',
           }}
         />
-        <Stack.Screen 
-          name="Todo" 
+        <Stack.Screen
+          name="Todo"
           component={TodoScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen
+          name="AdminAccess"
+          component={AdminAccessScreen}
           options={{
             gestureDirection: 'horizontal',
           }}

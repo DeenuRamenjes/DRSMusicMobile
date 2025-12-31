@@ -95,6 +95,7 @@ interface PlayerState {
     setQueue: (songs: Song[]) => void;
     addToQueue: (song: Song) => void;
     removeFromQueue: (songId: string) => void;
+    moveToNextInQueue: (songId: string) => void;
     clearQueue: () => void;
     updateProgress: (position: number, duration: number) => void;
     setIsPlaying: (isPlaying: boolean) => void;
@@ -498,6 +499,26 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     removeFromQueue: (songId: string) => {
         const { queue } = get();
         set({ queue: queue.filter(s => s._id !== songId) });
+    },
+
+    moveToNextInQueue: (songId: string) => {
+        const { queue, currentIndex } = get();
+        const songIndex = queue.findIndex(s => s._id === songId);
+
+        if (songIndex === -1) return; // Song not in queue
+        if (songIndex === currentIndex + 1) return; // Already next
+
+        const song = queue[songIndex];
+        const newQueue = [...queue];
+
+        // Remove from current position
+        newQueue.splice(songIndex, 1);
+
+        // Insert after current song
+        const insertIndex = currentIndex + 1;
+        newQueue.splice(insertIndex, 0, song);
+
+        set({ queue: newQueue });
     },
 
     clearQueue: () => {

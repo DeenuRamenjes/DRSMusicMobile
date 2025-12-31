@@ -19,11 +19,13 @@ import { useNavigation } from '@react-navigation/native';
 import { pick, types } from '@react-native-documents/picker';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { useFriendsStore } from '../store/useFriendsStore';
 import axiosInstance from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
 
 const SECURITY_PIN = '1288';
+const SUPER_ADMIN_EMAIL = 'deenuramenjes29@gmail.com';
 
 interface AdminUser {
   _id: string;
@@ -38,9 +40,13 @@ interface AdminUser {
 export const ManageUsersScreen = () => {
   const navigation = useNavigation();
   const { colors: themeColors } = useThemeStore();
+  const { user: currentUser } = useAuthStore();
   const { onlineUsers } = useFriendsStore();
   const { dialogState, hideDialog, showSuccess, showError, showConfirm } = useDialog();
-  
+
+  // Check if current user is super admin
+  const isSuperAdmin = currentUser?.emailAddress === SUPER_ADMIN_EMAIL;
+
   // PIN Protection State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pin, setPin] = useState('');
@@ -48,12 +54,12 @@ export const ManageUsersScreen = () => {
   const [attempts, setAttempts] = useState(0);
   const [isLockedOut, setIsLockedOut] = useState(false);
   const pinInputRef = useRef<TextInput>(null);
-  
+
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -67,7 +73,7 @@ export const ManageUsersScreen = () => {
     const cleanValue = value.replace(/[^0-9]/g, '').slice(0, 4);
     setPin(cleanValue);
     setPinError(false);
-    
+
     // Auto-verify when 4 digits entered
     if (cleanValue.length === 4) {
       if (cleanValue === SECURITY_PIN) {
@@ -77,7 +83,7 @@ export const ManageUsersScreen = () => {
         setPinError(true);
         Vibration.vibrate([0, 100, 50, 100]);
         setAttempts(prev => prev + 1);
-        
+
         // Clear PIN after wrong attempt
         setTimeout(() => {
           setPin('');
@@ -102,7 +108,7 @@ export const ManageUsersScreen = () => {
   // Fetch users from admin API (only when authenticated)
   const fetchUsers = useCallback(async () => {
     if (!isAuthenticated) return;
-    
+
     try {
       setIsLoading(true);
       const { data } = await axiosInstance.get('/admin/users');
@@ -149,6 +155,11 @@ export const ManageUsersScreen = () => {
   };
 
   const handleEditPress = (user: AdminUser) => {
+    if (!isSuperAdmin) {
+      showError('Access Denied', 'Only the super admin can edit users.');
+      return;
+    }
+
     setEditingUser(user);
     setEditForm({
       name: user.name || '',
@@ -160,6 +171,12 @@ export const ManageUsersScreen = () => {
   };
 
   const handleDeletePress = (user: AdminUser) => {
+    // Only super admin can delete users
+    if (!isSuperAdmin) {
+      showError('Access Denied', 'Only the super admin can delete users.');
+      return;
+    }
+
     showConfirm(
       'Delete User',
       `Are you sure you want to delete "${user.name}"? This action cannot be undone.`,
@@ -198,13 +215,13 @@ export const ManageUsersScreen = () => {
 
   const handleSaveEdit = async () => {
     if (!editingUser) return;
-    
+
     setIsUpdating(true);
     try {
       const formData = new FormData();
       formData.append('name', editForm.name);
       formData.append('email', editForm.email);
-      
+
       if (newImageFile) {
         formData.append('imageFile', {
           uri: newImageFile.uri,
@@ -231,7 +248,7 @@ export const ManageUsersScreen = () => {
 
   const renderUserItem = ({ item: user }: { item: AdminUser }) => {
     const isOnline = onlineUsers.has(user.clerkId);
-    
+
     return (
       <View style={styles.userCard}>
         <View style={styles.avatarContainer}>
@@ -239,7 +256,7 @@ export const ManageUsersScreen = () => {
             source={{ uri: user.image || 'https://via.placeholder.com/50' }}
             style={styles.avatar}
           />
-          <View style={[styles.onlineIndicator, isOnline ? styles.online : styles.offline]} />
+          <View style={[styles.onlineIndicator, isOnline ? { backgroundColor: themeColors.primary } : styles.offline]} />
         </View>
         <View style={styles.userInfo}>
           <Text style={styles.userName} numberOfLines={1}>
@@ -260,13 +277,13 @@ export const ManageUsersScreen = () => {
           </View>
         </View>
         <View style={styles.actionButtons}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: themeColors.primaryMuted }]}
             onPress={() => handleEditPress(user)}
           >
             <Icon name="edit-2" size={16} color={themeColors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}
             onPress={() => handleDeletePress(user)}
           >
@@ -282,7 +299,7 @@ export const ManageUsersScreen = () => {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-        
+
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -296,7 +313,7 @@ export const ManageUsersScreen = () => {
           <View style={styles.lockIconContainer}>
             <Icon name="lock" size={48} color={themeColors.primary} />
           </View>
-          
+
           <Text style={styles.pinTitle}>Enter PIN</Text>
           <Text style={styles.pinSubtitle}>
             Enter your 4-digit PIN to access user management
@@ -336,7 +353,7 @@ export const ManageUsersScreen = () => {
           />
 
           {/* Keypad hint */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.focusButton}
             onPress={() => pinInputRef.current?.focus()}
           >
@@ -392,7 +409,7 @@ export const ManageUsersScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -573,7 +590,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
+
   // PIN Screen Styles
   pinContainer: {
     // translateX: 120,  
@@ -648,7 +665,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: FONT_SIZES.sm,
   },
-  
+
   // Main screen styles
   countContainer: {
     paddingHorizontal: SPACING.md,

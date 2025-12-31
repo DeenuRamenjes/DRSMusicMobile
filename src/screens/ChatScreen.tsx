@@ -65,12 +65,16 @@ const MessageBubble = ({
   avatarUrl,
   themeColor,
   onPlaySong,
+  isCurrentlyPlaying,
+  userName,
 }: {
   message: Message;
   isOwn: boolean;
   avatarUrl: string;
   themeColor: string;
   onPlaySong?: (songData: Message['songData']) => void;
+  isCurrentlyPlaying?: boolean;
+  userName?: string;
 }) => {
   const isSongMessage = message.messageType === 'song' && message.songData;
 
@@ -88,7 +92,11 @@ const MessageBubble = ({
           {avatarUrl ? (
             <Image source={{ uri: getFullImageUrl(avatarUrl) }} style={styles.messageAvatar} />
           ) : (
-            <View />
+            <View style={[styles.messageAvatar, styles.avatarPlaceholder, { backgroundColor: themeColor + '30' }]}>
+              <Text style={[styles.avatarInitial, { color: themeColor }]}>
+                {userName?.charAt(0)?.toUpperCase() || '?'}
+              </Text>
+            </View>
           )}
         </View>
       )}
@@ -130,9 +138,9 @@ const MessageBubble = ({
               )}
             </View>
             
-            {/* Play Button */}
+            {/* Play/Pause Button */}
             <View style={[styles.playButton, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : themeColor }]}>
-              <Icon name="play" size={18} color={isOwn ? '#fff' : '#fff'} />
+              <Icon name={isCurrentlyPlaying ? "pause" : "play"} size={18} color="#fff" />
             </View>
           </View>
           
@@ -183,7 +191,7 @@ export const ChatScreen = () => {
   } = useFriendsStore();
   
   const { songs, fetchSongs } = useMusicStore();
-  const { playSong } = usePlayerStore();
+  const { playSong, isPlaying: isSongPlaying, currentSong, togglePlayPause } = usePlayerStore();
 
   const [messageText, setMessageText] = useState('');
   const flatListRef = useRef<FlatList>(null);
@@ -198,7 +206,7 @@ export const ChatScreen = () => {
   // Check if user is online
   const isOnline = onlineUsers.has(chatUserId);
   const activity = userActivities.get(chatUserId);
-  const isPlaying = activity && activity !== 'Idle';
+  const isUserPlayingMusic = activity && activity !== 'Idle';
 
   // Filter songs based on search query
   const filteredSongs = songs.filter((song) => {
@@ -315,20 +323,29 @@ export const ChatScreen = () => {
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isOwn = item.senderId === currentUserId;
+    
+    // Check if this song message is currently playing
+    const isSongCurrentlyPlaying = 
+      item.messageType === 'song' && 
+      item.songData?.songId === currentSong?._id && 
+      isSongPlaying;
+    
     return (
       <MessageBubble
         message={item}
         isOwn={isOwn}
-        avatarUrl={isOwn ? (authUser?.imageUrl || '') : (chatUser.imageUrl || '')}
+        avatarUrl={isOwn ? (authUser?.imageUrl || '') : (chatUser.image || chatUser.imageUrl || '')}
         themeColor={themeColors.primary}
         onPlaySong={handlePlaySong}
+        isCurrentlyPlaying={isSongCurrentlyPlaying}
+        userName={isOwn ? authUser?.name : chatUser.name}
       />
     );
   };
 
   // Status text
   const getStatusText = () => {
-    if (isPlaying && activity) {
+    if (isUserPlayingMusic && activity) {
       const songInfo = activity.replace('Playing ', '');
       return `🎵 ${songInfo}`;
     }
@@ -653,8 +670,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   avatarText: {
     color: COLORS.textPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  avatarInitial: {
     fontSize: 12,
     fontWeight: '600',
   },

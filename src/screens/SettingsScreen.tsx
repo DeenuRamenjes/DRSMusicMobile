@@ -9,13 +9,17 @@ import {
   Switch,
   ActivityIndicator,
   Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native'
+import Slider from '@react-native-community/slider';
+import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, DIMENSIONS, ACCENT_COLORS } from '../constants/theme';
 import { useAuthStore } from '../store/useAuthStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { useEqualizerStore, EQ_PRESETS, EQ_BANDS, PresetKey, BandId } from '../store/useEqualizerStore';
 import { useBackendStore, BACKEND_SERVERS, USE_DEPLOYMENT } from '../config';
 import axiosInstance from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
@@ -92,14 +96,14 @@ const ColorPicker = ({ selected, onChange }: { selected: string; onChange: (colo
 );
 
 // Select Component
-const SelectOption = ({ 
-  value, 
-  options, 
+const SelectOption = ({
+  value,
+  options,
   onChange,
   themeColor,
-}: { 
-  value: string; 
-  options: { value: string; label: string }[]; 
+}: {
+  value: string;
+  options: { value: string; label: string }[];
   onChange: (v: string) => void;
   themeColor?: string;
 }) => {
@@ -109,21 +113,21 @@ const SelectOption = ({
 
   return (
     <>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.selectButton}
         onPress={() => setIsOpen(true)}
       >
         <Text style={styles.selectText}>{currentLabel}</Text>
         <Text style={styles.selectArrow}>›</Text>
       </TouchableOpacity>
-      
+
       <Modal
         visible={isOpen}
         transparent
         animationType="fade"
         onRequestClose={() => setIsOpen(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.selectModalOverlay}
           activeOpacity={1}
           onPress={() => setIsOpen(false)}
@@ -163,17 +167,17 @@ export const SettingsScreen = () => {
   const navigation = useNavigation();
   const { user, logout, isAuthenticated } = useAuthStore();
   const { dialogState, hideDialog, showError, showConfirm } = useDialog();
-  const { 
-    audioQuality, 
-    setAudioQuality, 
-    crossfade, 
+  const {
+    audioQuality,
+    setAudioQuality,
+    crossfade,
     toggleCrossfade,
     isShuffle,
     isLooping,
     toggleShuffle,
     toggleLoop,
   } = usePlayerStore();
-  
+
   const {
     accentColor: themeAccentColor,
     compactMode: themeCompactMode,
@@ -181,14 +185,17 @@ export const SettingsScreen = () => {
     setCompactMode: setThemeCompactMode,
     colors: themeColors,
   } = useThemeStore();
-  
+
   // Backend server selection
-  const { 
-    selectedServerId, 
-    setSelectedServer, 
-    loadSelectedServer 
+  const {
+    selectedServerId,
+    setSelectedServer,
+    loadSelectedServer,
+    serverHealthStatus,
+    checkAllServersHealth,
+    checkServerHealth
   } = useBackendStore();
-  
+
   const [settings, setSettings] = useState({
     emailNotifications: true,
     pushNotifications: false,
@@ -199,7 +206,7 @@ export const SettingsScreen = () => {
     allowFriendRequests: true,
     audioQuality: 'high',
     crossfade: false,
-    gaplessPlayback: true,
+    gaplessPlayback: false,
     normalizeVolume: false,
     shuffle: false,
     loop: false,
@@ -214,11 +221,25 @@ export const SettingsScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEqualizerModal, setShowEqualizerModal] = useState(false);
+
+  // Equalizer store
+  const {
+    enabled: eqEnabled,
+    preset: eqPreset,
+    customBands,
+    setEnabled: setEqEnabled,
+    setPreset: setEqPreset,
+    setBandValue,
+    resetCustomBands,
+    getBandValues,
+    loadFromSettings: loadEqFromSettings,
+  } = useEqualizerStore();
 
   // Handle server switching
   const handleServerSwitch = async (serverId: string) => {
     if (serverId === selectedServerId) return;
-    
+
     const server = BACKEND_SERVERS.find(s => s.id === serverId);
     showConfirm(
       'Switch Server',
@@ -232,17 +253,32 @@ export const SettingsScreen = () => {
     );
   };
 
-  // Load backend server preference on mount
+  // Load backend server preference and check health on mount
   useEffect(() => {
     loadSelectedServer();
+    // Check health of all servers when Settings opens
+    checkAllServersHealth();
   }, []);
+
+  // Auto-save equalizer settings when they change
+  useEffect(() => {
+    // Skip initial render and when loading
+    if (isLoading) return;
+
+    // Debounce save to avoid too many API calls
+    const saveTimeout = setTimeout(() => {
+      saveSettings(settings);
+    }, 500);
+
+    return () => clearTimeout(saveTimeout);
+  }, [eqEnabled, eqPreset, customBands]);
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
         const response = await axiosInstance.get('/users/me/settings');
         const bs = response.data;
-        
+
         if (bs) {
           setSettings(prev => ({
             ...prev,
@@ -266,7 +302,7 @@ export const SettingsScreen = () => {
             newReleases: bs.notifications?.newReleases ?? prev.newReleases,
             friendActivity: bs.notifications?.friendActivity ?? prev.friendActivity,
           }));
-          
+
           // Sync player store with backend settings
           if (bs.playback?.audioQuality) setAudioQuality(bs.playback.audioQuality);
           // Sync shuffle/loop only if they differ from current state
@@ -276,7 +312,7 @@ export const SettingsScreen = () => {
           if (bs.playback?.loop !== undefined && bs.playback.loop !== isLooping) {
             toggleLoop();
           }
-          
+
           // Sync theme store with backend settings
           if (bs.display?.accentColor) {
             setThemeAccentColor(bs.display.accentColor);
@@ -284,6 +320,9 @@ export const SettingsScreen = () => {
           if (bs.display?.compactMode !== undefined) {
             setThemeCompactMode(bs.display.compactMode);
           }
+
+          // Load equalizer settings
+          loadEqFromSettings(bs);
         }
       } catch (error) {
         console.warn('Failed to load settings:', error);
@@ -291,7 +330,7 @@ export const SettingsScreen = () => {
         setIsLoading(false);
       }
     };
-    
+
     if (isAuthenticated) {
       loadSettings();
     } else {
@@ -304,34 +343,38 @@ export const SettingsScreen = () => {
     try {
       await axiosInstance.put('/users/me/settings', {
         settings: {
-          playback: { 
-            audioQuality: updated.audioQuality, 
-            crossfade: updated.crossfade, 
-            gaplessPlayback: updated.gaplessPlayback, 
+          playback: {
+            audioQuality: updated.audioQuality,
+            crossfade: updated.crossfade,
+            gaplessPlayback: updated.gaplessPlayback,
             normalizeVolume: updated.normalizeVolume,
             shuffle: updated.shuffle,
             loop: updated.loop,
+            // Equalizer settings
+            equalizerEnabled: eqEnabled,
+            equalizerPreset: eqPreset,
+            customBands: customBands,
           },
-          display: { 
-            accentColor: updated.accentColor, 
-            compactMode: updated.compactMode, 
-            layout: updated.layout 
+          display: {
+            accentColor: updated.accentColor,
+            compactMode: updated.compactMode,
+            layout: updated.layout
           },
-          downloads: { 
-            downloadQuality: updated.downloadQuality, 
-            downloadOverWifi: updated.downloadOverWifi, 
-            autoDownload: updated.autoDownload 
+          downloads: {
+            downloadQuality: updated.downloadQuality,
+            downloadOverWifi: updated.downloadOverWifi,
+            autoDownload: updated.autoDownload
           },
-          privacy: { 
-            profileVisibility: updated.profileVisibility, 
-            showListeningActivity: updated.showListeningActivity, 
-            allowFriendRequests: updated.allowFriendRequests 
+          privacy: {
+            profileVisibility: updated.profileVisibility,
+            showListeningActivity: updated.showListeningActivity,
+            allowFriendRequests: updated.allowFriendRequests
           },
-          notifications: { 
-            emailNotifications: updated.emailNotifications, 
-            pushNotifications: updated.pushNotifications, 
-            newReleases: updated.newReleases, 
-            friendActivity: updated.friendActivity 
+          notifications: {
+            emailNotifications: updated.emailNotifications,
+            pushNotifications: updated.pushNotifications,
+            newReleases: updated.newReleases,
+            friendActivity: updated.friendActivity
           }
         }
       });
@@ -345,17 +388,17 @@ export const SettingsScreen = () => {
   const update = (key: string, value: any) => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
-    
+
     // Sync player store with settings changes
     if (key === 'audioQuality') setAudioQuality(value);
     if (key === 'crossfade' && value !== crossfade) toggleCrossfade();
     if (key === 'shuffle' && value !== isShuffle) toggleShuffle();
     if (key === 'loop' && value !== isLooping) toggleLoop();
-    
+
     // Sync theme store with settings changes
     if (key === 'accentColor') setThemeAccentColor(value);
     if (key === 'compactMode') setThemeCompactMode(value);
-    
+
     saveSettings(updated);
   };
 
@@ -408,7 +451,7 @@ export const SettingsScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
@@ -423,7 +466,7 @@ export const SettingsScreen = () => {
         </View>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -449,7 +492,7 @@ export const SettingsScreen = () => {
         {/* PLAYBACK */}
         <SectionHeader icon="🎧" title="PLAYBACK" />
         <Section>
-          <SettingItem label="Audio Quality">
+          {/* <SettingItem label="Audio Quality">
             <SelectOption
               value={settings.audioQuality}
               options={[
@@ -460,7 +503,7 @@ export const SettingsScreen = () => {
               onChange={(v) => update('audioQuality', v)}
               themeColor={themeColors.primary}
             />
-          </SettingItem>
+          </SettingItem> */}
           <SettingItem label="Shuffle">
             <Toggle enabled={isShuffle} onChange={() => update('shuffle', !isShuffle)} themeColor={themeColors.primary} />
           </SettingItem>
@@ -470,13 +513,153 @@ export const SettingsScreen = () => {
           <SettingItem label="Crossfade">
             <Toggle enabled={settings.crossfade} onChange={() => update('crossfade', !settings.crossfade)} themeColor={themeColors.primary} />
           </SettingItem>
-          <SettingItem label="Gapless Playback">
+          <SettingItem label="Gapless Playback" border={false}>
             <Toggle enabled={settings.gaplessPlayback} onChange={() => update('gaplessPlayback', !settings.gaplessPlayback)} themeColor={themeColors.primary} />
           </SettingItem>
-          <SettingItem label="Normalize Volume" border={false}>
+          {/* <SettingItem label="Normalize Volume" border={false}>
             <Toggle enabled={settings.normalizeVolume} onChange={() => update('normalizeVolume', !settings.normalizeVolume)} themeColor={themeColors.primary} />
-          </SettingItem>
+          </SettingItem> */}
         </Section>
+
+        {/* EQUALIZER */}
+        <SectionHeader icon="🎚️" title="EQUALIZER" />
+        <Section>
+          <SettingItem label="Enable Equalizer">
+            <Toggle
+              enabled={eqEnabled}
+              onChange={() => setEqEnabled(!eqEnabled)}
+              themeColor={themeColors.primary}
+            />
+          </SettingItem>
+
+          {eqEnabled && (
+            <>
+              {/* Preset Grid */}
+              <View style={styles.eqPresetContainer}>
+                <Text style={styles.eqPresetLabel}>Presets</Text>
+                <View style={styles.eqPresetGrid}>
+                  {(Object.keys(EQ_PRESETS) as PresetKey[]).map((key) => {
+                    const preset = EQ_PRESETS[key];
+                    const isActive = eqPreset === key;
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={[
+                          styles.eqPresetButton,
+                          isActive && { backgroundColor: themeColors.primary, borderColor: themeColors.primary }
+                        ]}
+                        onPress={() => {
+                          setEqPreset(key);
+                          if (key === 'custom') {
+                            setShowEqualizerModal(true);
+                          }
+                        }}
+                      >
+                        <Text style={styles.eqPresetIcon}>{preset.icon}</Text>
+                        <Text style={[
+                          styles.eqPresetName,
+                          isActive && { color: '#fff' }
+                        ]}>{preset.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Custom EQ Button */}
+              <TouchableOpacity
+                style={styles.eqCustomButton}
+                onPress={() => setShowEqualizerModal(true)}
+              >
+                <Icon name="sliders" size={18} color={themeColors.primary} />
+                <Text style={[styles.eqCustomButtonText, { color: themeColors.primary }]}>
+                  Customize Equalizer
+                </Text>
+                <Icon name="chevron-right" size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
+        </Section>
+
+        {/* Custom Equalizer Modal */}
+        <Modal
+          visible={showEqualizerModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowEqualizerModal(false)}
+        >
+          <View style={styles.eqModalOverlay}>
+            <View style={styles.eqModalContent}>
+              {/* Modal Header */}
+              <View style={styles.eqModalHeader}>
+                <Text style={styles.eqModalTitle}>Custom Equalizer</Text>
+                <TouchableOpacity onPress={() => setShowEqualizerModal(false)}>
+                  <Icon name="x" size={24} color={COLORS.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Preset Info */}
+              <View style={styles.eqModalPresetInfo}>
+                <Text style={styles.eqModalPresetLabel}>
+                  Current: <Text style={{ color: themeColors.primary }}>{EQ_PRESETS[eqPreset].name}</Text>
+                </Text>
+              </View>
+
+              {/* Band Sliders */}
+              <View style={styles.eqBandsContainer}>
+                {EQ_BANDS.map((band) => {
+                  const value = customBands[band.id];
+                  return (
+                    <View key={band.id} style={styles.eqBandColumn}>
+                      <Text style={styles.eqBandValue}>
+                        {value > 0 ? `+${value}` : value}
+                      </Text>
+                      <View style={styles.eqSliderContainer}>
+                        <Slider
+                          style={styles.eqSlider}
+                          value={value}
+                          minimumValue={-12}
+                          maximumValue={12}
+                          step={1}
+                          minimumTrackTintColor={themeColors.primary}
+                          maximumTrackTintColor={COLORS.zinc700}
+                          thumbTintColor={themeColors.primary}
+                          onValueChange={(v) => setBandValue(band.id, v)}
+                        />
+                      </View>
+                      <Text style={styles.eqBandLabel}>{band.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* dB Labels */}
+              <View style={styles.eqDbLabels}>
+                <Text style={styles.eqDbLabel}>+12 dB</Text>
+                <Text style={styles.eqDbLabel}>0 dB</Text>
+                <Text style={styles.eqDbLabel}>-12 dB</Text>
+              </View>
+
+              {/* Actions */}
+              <View style={styles.eqModalActions}>
+                <TouchableOpacity
+                  style={styles.eqResetButton}
+                  onPress={resetCustomBands}
+                >
+                  <Icon name="refresh-cw" size={16} color={COLORS.textMuted} />
+                  <Text style={styles.eqResetButtonText}>Reset to Flat</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.eqDoneButton, { backgroundColor: themeColors.primary }]}
+                  onPress={() => setShowEqualizerModal(false)}
+                >
+                  <Text style={styles.eqDoneButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* APPEARANCE */}
         <SectionHeader icon="🎨" title="APPEARANCE" />
@@ -484,10 +667,10 @@ export const SettingsScreen = () => {
           <SettingItem label="Accent Color">
             <ColorPicker selected={settings.accentColor} onChange={(c) => update('accentColor', c)} />
           </SettingItem>
-          <SettingItem label="Compact Mode">
+          <SettingItem label="Compact Mode" border={false}>
             <Toggle enabled={settings.compactMode} onChange={() => update('compactMode', !settings.compactMode)} themeColor={themeColors.primary} />
           </SettingItem>
-          <SettingItem label="Layout" border={false}>
+          {/* <SettingItem label="Layout" border={false}>
             <SelectOption
               value={settings.layout}
               options={[
@@ -498,13 +681,13 @@ export const SettingsScreen = () => {
               onChange={(v) => update('layout', v)}
               themeColor={themeColors.primary}
             />
-          </SettingItem>
+          </SettingItem> */}
         </Section>
 
         {/* DOWNLOADS */}
         <SectionHeader icon="📥" title="DOWNLOADS" />
         <Section>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.settingItem, styles.settingItemBorder]}
             onPress={() => (navigation as any).navigate('OfflineMusic')}
           >
@@ -515,7 +698,7 @@ export const SettingsScreen = () => {
               </Text>
             </View>
           </TouchableOpacity>
-          <SettingItem label="Download Quality">
+          {/* <SettingItem label="Download Quality">
             <SelectOption
               value={settings.downloadQuality}
               options={[
@@ -532,11 +715,11 @@ export const SettingsScreen = () => {
           </SettingItem>
           <SettingItem label="Auto Download" border={false}>
             <Toggle enabled={settings.autoDownload} onChange={() => update('autoDownload', !settings.autoDownload)} themeColor={themeColors.primary} />
-          </SettingItem>
+          </SettingItem> */}
         </Section>
 
         {/* PRIVACY */}
-        <SectionHeader icon="🛡️" title="PRIVACY" />
+        {/* <SectionHeader icon="🛡️" title="PRIVACY" />
         <Section>
           <SettingItem label="Profile Visibility">
             <SelectOption
@@ -556,10 +739,10 @@ export const SettingsScreen = () => {
           <SettingItem label="Allow Friend Requests" border={false}>
             <Toggle enabled={settings.allowFriendRequests} onChange={() => update('allowFriendRequests', !settings.allowFriendRequests)} themeColor={themeColors.primary} />
           </SettingItem>
-        </Section>
+        </Section> */}
 
         {/* NOTIFICATIONS */}
-        <SectionHeader icon="🔔" title="NOTIFICATIONS" />
+        {/* <SectionHeader icon="🔔" title="NOTIFICATIONS" />
         <Section>
           <SettingItem label="Email Notifications">
             <Toggle enabled={settings.emailNotifications} onChange={() => update('emailNotifications', !settings.emailNotifications)} themeColor={themeColors.primary} />
@@ -573,7 +756,7 @@ export const SettingsScreen = () => {
           <SettingItem label="Friend Activity" border={false}>
             <Toggle enabled={settings.friendActivity} onChange={() => update('friendActivity', !settings.friendActivity)} themeColor={themeColors.primary} />
           </SettingItem>
-        </Section>
+        </Section> */}
 
         {/* SERVER - Only show when using deployment */}
         {USE_DEPLOYMENT && (
@@ -583,20 +766,60 @@ export const SettingsScreen = () => {
               {BACKEND_SERVERS.map((server, index) => {
                 const isSelected = selectedServerId === server.id;
                 const isLast = index === BACKEND_SERVERS.length - 1;
+                const healthStatus = serverHealthStatus[server.id] || 'unknown';
+
+                const getHealthBadge = () => {
+                  switch (healthStatus) {
+                    case 'online':
+                      return { color: '#10b981', text: 'Online', icon: '●' };
+                    case 'offline':
+                      return { color: '#ef4444', text: 'Offline', icon: '●' };
+                    case 'checking':
+                      return { color: '#f59e0b', text: 'Checking...', icon: '○' };
+                    default:
+                      return { color: COLORS.textMuted, text: '', icon: '' };
+                  }
+                };
+                const badge = getHealthBadge();
+
                 return (
                   <TouchableOpacity
                     key={server.id}
                     style={[
-                      styles.settingItem, 
+                      styles.settingItem,
                       !isLast && styles.settingItemBorder
                     ]}
                     onPress={() => handleServerSwitch(server.id)}
+                    onLongPress={() => checkServerHealth(server.id)}
                   >
                     <View style={styles.serverInfo}>
-                      <Text style={styles.settingLabel}>{server.name}</Text>
-                      {server.description && (
-                        <Text style={styles.serverDescription}>{server.description}</Text>
-                      )}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.settingLabel}>{server.name}</Text>
+                        {isSelected && (
+                          <View style={{
+                            backgroundColor: themeColors.primaryMuted,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 10
+                          }}>
+                            <Text style={{ fontSize: 10, color: themeColors.primary, fontWeight: '600' }}>ACTIVE</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        {badge.text && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={{ color: badge.color, fontSize: 10 }}>{badge.icon}</Text>
+                            <Text style={{ color: badge.color, fontSize: 12 }}>{badge.text}</Text>
+                          </View>
+                        )}
+                        {server.description && badge.text && (
+                          <Text style={{ color: COLORS.textMuted, fontSize: 12 }}>•</Text>
+                        )}
+                        {server.description && (
+                          <Text style={styles.serverDescription}>{server.description}</Text>
+                        )}
+                      </View>
                     </View>
                     {isSelected ? (
                       <Text style={[styles.checkmark, { color: themeColors.primary }]}>✓</Text>
@@ -606,6 +829,15 @@ export const SettingsScreen = () => {
                   </TouchableOpacity>
                 );
               })}
+              {/* Refresh health status button */}
+              <TouchableOpacity
+                style={[styles.settingItem, { justifyContent: 'center' }]}
+                onPress={checkAllServersHealth}
+              >
+                <Text style={{ color: themeColors.primary, fontSize: 14, fontWeight: '500' }}>
+                  ↻ Check Server Status
+                </Text>
+              </TouchableOpacity>
             </Section>
           </>
         )}
@@ -613,14 +845,14 @@ export const SettingsScreen = () => {
         {/* ACCOUNT */}
         <SectionHeader icon="👤" title="ACCOUNT" />
         <Section>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.settingItem, styles.settingItemBorder]}
             onPress={handleSignOut}
           >
             <Text style={styles.settingLabel}>Sign Out</Text>
             <Text style={styles.actionIcon}>→</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.settingItem}
             onPress={handleDeleteAccount}
           >
@@ -920,6 +1152,164 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     fontSize: 20,
+    fontWeight: '600',
+  },
+
+  // Equalizer Styles
+  eqPresetContainer: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.zinc800,
+  },
+  eqPresetLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginBottom: SPACING.sm,
+  },
+  eqPresetGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  eqPresetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.zinc800,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.zinc700,
+    gap: SPACING.xs,
+  },
+  eqPresetIcon: {
+    fontSize: 16,
+  },
+  eqPresetName: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  eqCustomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.zinc800,
+    gap: SPACING.sm,
+  },
+  eqCustomButtonText: {
+    flex: 1,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
+  },
+
+  // Equalizer Modal
+  eqModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  eqModalContent: {
+    backgroundColor: COLORS.zinc900,
+    borderTopLeftRadius: BORDER_RADIUS.xxl,
+    borderTopRightRadius: BORDER_RADIUS.xxl,
+    paddingBottom: SPACING.xxl,
+  },
+  eqModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.zinc800,
+  },
+  eqModalTitle: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  eqModalPresetInfo: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  eqModalPresetLabel: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+  },
+  eqBandsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.lg,
+  },
+  eqBandColumn: {
+    alignItems: 'center',
+    width: 60,
+  },
+  eqBandValue: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+  },
+  eqSliderContainer: {
+    height: 150,
+    justifyContent: 'center',
+  },
+  eqSlider: {
+    width: 150,
+    height: 40,
+    transform: [{ rotate: '-90deg' }],
+  },
+  eqBandLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    marginTop: SPACING.sm,
+  },
+  eqDbLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xxl,
+    marginBottom: SPACING.lg,
+  },
+  eqDbLabel: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+  },
+  eqModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    gap: SPACING.md,
+  },
+  eqResetButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.zinc800,
+    borderRadius: BORDER_RADIUS.lg,
+    gap: SPACING.sm,
+  },
+  eqResetButtonText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  eqDoneButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  eqDoneButtonText: {
+    fontSize: FONT_SIZES.md,
+    color: '#fff',
     fontWeight: '600',
   },
 });

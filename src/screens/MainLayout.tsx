@@ -11,6 +11,7 @@ import {
   Image,
   Pressable,
 } from 'react-native';
+import axiosInstance from '../api/axios';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -58,7 +59,10 @@ const LeftSidebar = ({
   const { albums, fetchAlbums, isLoading } = useMusicStore();
   const { playAlbum } = usePlayerStore();
   const { unreadCounts } = useFriendsStore();
-  
+  const { user } = useAuthStore();
+  const { colors: themeColors } = useThemeStore();
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   // Calculate total unread messages
   const totalUnread = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
 
@@ -101,6 +105,39 @@ const LeftSidebar = ({
 
   return (
     <View style={styles.sidebar}>
+      {/* User Profile Section */}
+      <View style={styles.sidebarUserSection}>
+        <View style={styles.sidebarUserAvatar}>
+          {user?.imageUrl ? (
+            <Image
+              source={{ uri: getFullImageUrl(user.imageUrl) }}
+              style={styles.sidebarUserAvatarImage}
+            />
+          ) : (
+            <View style={[styles.sidebarUserAvatarPlaceholder, { backgroundColor: themeColors.primary + '30' }]}>
+              <Text style={[styles.sidebarUserAvatarText, { color: themeColors.primary }]}>
+                {user?.name?.charAt(0)?.toUpperCase() || '?'}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.sidebarUserInfo}>
+          <Text style={styles.sidebarUserName} numberOfLines={1}>{user?.name || 'Guest'}</Text>
+          <Text style={styles.sidebarUserEmail} numberOfLines={1}>{user?.emailAddress || ''}</Text>
+        </View>
+          {/* <View style={styles.sidebarCloseRow}>
+              <TouchableOpacity
+                onPress={() => setIsSidebarOpen(false)}
+                style={styles.sidebarCloseButton}
+              >
+                <Icon name="x" size={24} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View> */}
+      </View>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
       {/* Navigation Section */}
       <View style={styles.sidebarNav}>
         {navItems.map(item => (
@@ -190,36 +227,36 @@ const LeftSidebar = ({
         >
           {isLoading
             ? // Skeleton loading
-              [...Array(5)].map((_, i) => (
-                <View key={i} style={styles.albumItemSkeleton}>
-                  <View style={styles.albumImageSkeleton} />
-                  <View style={styles.albumTextSkeleton}>
-                    <View style={styles.albumTitleSkeleton} />
-                    <View style={styles.albumSubtitleSkeleton} />
-                  </View>
+            [...Array(5)].map((_, i) => (
+              <View key={i} style={styles.albumItemSkeleton}>
+                <View style={styles.albumImageSkeleton} />
+                <View style={styles.albumTextSkeleton}>
+                  <View style={styles.albumTitleSkeleton} />
+                  <View style={styles.albumSubtitleSkeleton} />
                 </View>
-              ))
+              </View>
+            ))
             : albums.map(album => (
-                <TouchableOpacity
-                  key={album._id}
-                  style={styles.albumItem}
-                  onPress={() => handleAlbumPress(album)}
-                  activeOpacity={0.7}
-                >
-                  <Image
-                    source={{ uri: getFullImageUrl(album.imageUrl) }}
-                    style={styles.albumImage}
-                  />
-                  <View style={styles.albumInfo}>
-                    <Text style={styles.albumTitle} numberOfLines={1}>
-                      {album.title}
-                    </Text>
-                    <Text style={styles.albumSubtitle} numberOfLines={1}>
-                      Album • {album.artist}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+              <TouchableOpacity
+                key={album._id}
+                style={styles.albumItem}
+                onPress={() => handleAlbumPress(album)}
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={{ uri: getFullImageUrl(album.imageUrl) }}
+                  style={styles.albumImage}
+                />
+                <View style={styles.albumInfo}>
+                  <Text style={styles.albumTitle} numberOfLines={1}>
+                    {album.title}
+                  </Text>
+                  <Text style={styles.albumSubtitle} numberOfLines={1}>
+                    Album • {album.artist}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
         </ScrollView>
       </View>
     </View>
@@ -274,16 +311,10 @@ const CustomTabBar = ({
   );
 };
 
-// Admin email - only this user can see the admin button
-const ADMIN_EMAILS = [
-  'demo@drsmusic.com',
-  'deenuramenjes29@gmail.com',
-  'rohith17r.3@gmail.com',
-];
-
 export const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const tabNavigationRef = React.useRef<any>(null);
   const stackNavigation = useNavigation();
   const { fetchAlbums } = useMusicStore();
@@ -293,8 +324,23 @@ export const MainLayout = () => {
   const { initSocket, disconnectSocket, unreadCounts } = useFriendsStore();
   const slideAnim = useState(new Animated.Value(-300))[0];
 
-  const isAdmin = ADMIN_EMAILS.includes(user?.emailAddress ?? '');
-  
+  // Check admin status from API
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      try {
+        await axiosInstance.get('/admin/check');
+        setIsAdmin(true);
+      } catch (error) {
+        setIsAdmin(false);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
+
   // Calculate total unread messages
   const totalUnread = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
 
@@ -372,16 +418,15 @@ export const MainLayout = () => {
               { transform: [{ translateX: slideAnim }] },
             ]}
           >
-            {/* Sidebar Header */}
-            <View style={styles.sidebarHeader}>
-              <View style={styles.sidebarLogoContainer}>
-                <Image source={DRSLogo} style={styles.DRSLogo} />
-                <Text style={styles.sidebarLogoText}>DRS Music</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsSidebarOpen(false)}>
-                <Text style={styles.closeIcon}>✕</Text>
+            {/* Sidebar Close Button */}
+            {/* <View style={styles.sidebarCloseRow}>
+              <TouchableOpacity
+                onPress={() => setIsSidebarOpen(false)}
+                style={styles.sidebarCloseButton}
+              >
+                <Icon name="x" size={24} color={COLORS.textMuted} />
               </TouchableOpacity>
-            </View>
+            </View> */}
 
             {/* Sidebar Content */}
             <LeftSidebar
@@ -417,7 +462,7 @@ export const MainLayout = () => {
           </View>
 
           {/* Logo */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.headerCenter}
             onPress={() => tabNavigationRef.current?.navigate('Home' as never)}
             activeOpacity={0.7}
@@ -922,5 +967,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 3,
+  },
+  sidebarUserSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    marginTop: 64,
+  },
+  sidebarUserAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  sidebarUserAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sidebarUserAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sidebarUserAvatarText: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '700',
+  },
+  sidebarUserInfo: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  sidebarUserName: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  sidebarUserEmail: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  sidebarCloseRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+  },
+  sidebarCloseButton: {
+    padding: SPACING.sm,
   },
 });

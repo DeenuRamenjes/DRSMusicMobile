@@ -9,6 +9,9 @@ import {
   Pressable,
   Modal,
   Image,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,6 +38,11 @@ export const LandingScreen = () => {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showWebView, setShowWebView] = useState(false);
   const [webViewUrl, setWebViewUrl] = useState('');
+  
+  // Email login states
+  const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   // Handle Google Sign-In via Clerk WebView
   const handleGoogleSignIn = () => {
@@ -196,6 +204,67 @@ export const LandingScreen = () => {
     }
   };
 
+  // Handle Email/Password Login
+  const handleEmailLogin = async () => {
+    if (isSigningIn) return;
+    
+    // Validate inputs
+    if (!email.trim()) {
+      showError('Error', 'Please enter your email address');
+      return;
+    }
+    if (!password.trim()) {
+      showError('Error', 'Please enter your password');
+      return;
+    }
+
+    setIsSigningIn(true);
+    
+    try {
+      // Call the email login endpoint
+      const response = await axiosInstance.post('/auth/email-login', {
+        email: email.trim().toLowerCase(),
+        password: password,
+      });
+
+      const { user, token } = response.data;
+
+      if (!user || !token) {
+        throw new Error('Invalid response from auth server');
+      }
+
+      // Close modal and clear inputs
+      setShowEmailLogin(false);
+      setEmail('');
+      setPassword('');
+
+      login(
+        {
+          id: user.id || user._id,
+          clerkId: user.clerkId,
+          name: user.name,
+          fullName: user.name,
+          emailAddress: user.email,
+          imageUrl: user.imageUrl || '',
+        },
+        token
+      );
+
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'MainLayout' as never }],
+        })
+      );
+    } catch (error: any) {
+      console.error('Email login error:', error);
+      const errorMessage = error.response?.data?.message || 'Invalid email or password';
+      showError('Login Failed', errorMessage);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
@@ -217,6 +286,7 @@ export const LandingScreen = () => {
 
         {/* Buttons */}
         <View style={styles.buttonSection}>
+          {/* <Text style={styles.loginText}>Login with Google</Text> */}
           <Pressable
             style={({ pressed }) => [styles.googleButton, pressed && styles.pressed]}
             onPress={handleGoogleSignIn}
@@ -229,6 +299,18 @@ export const LandingScreen = () => {
               defaultSource={{ uri: 'https://www.google.com/favicon.ico' }}
             />
             <Text style={styles.googleText}>Continue with Google</Text>
+          </Pressable>
+
+          <Text style={styles.loginText}>or</Text>
+
+          {/* Email Login Button */}
+          <Pressable
+            style={({ pressed }) => [styles.emailButton, pressed && styles.emailButtonPressed]}
+            onPress={() => setShowEmailLogin(true)}
+            disabled={isSigningIn}
+          >
+            <Text style={styles.emailIcon}>✉️</Text>
+            <Text style={styles.emailButtonText}>Sign in with Email</Text>
           </Pressable>
 
           {/* Demo login - only show in local development */}
@@ -258,6 +340,79 @@ export const LandingScreen = () => {
           </Text>
         </View>
       </SafeAreaView>
+
+      {/* Email Login Modal */}
+      <Modal
+        visible={showEmailLogin}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEmailLogin(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.emailModalOverlay}
+        >
+          <View style={styles.emailModalContent}>
+            <View style={styles.emailModalHeader}>
+              <Text style={styles.emailModalTitle}>Sign In</Text>
+              <Pressable onPress={() => { setShowEmailLogin(false); setEmail(''); setPassword(''); }}>
+                <Text style={styles.emailModalClose}>✕</Text>
+              </Pressable>
+            </View>
+            
+            <Text style={styles.emailModalSubtitle}>
+              Sign in with your email. Google users can also use this to set up email/password login.
+            </Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="your@email.com"
+                placeholderTextColor={COLORS.textMuted}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="••••••••"
+                placeholderTextColor={COLORS.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={true}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.emailLoginButton,
+                { backgroundColor: themeColors.primary },
+                pressed && { opacity: 0.8 }
+              ]}
+              onPress={handleEmailLogin}
+              disabled={isSigningIn}
+            >
+              {isSigningIn ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.emailLoginButtonText}>Sign In</Text>
+              )}
+            </Pressable>
+
+            {/* <Text style={styles.emailModalNote}>
+              Google users can also use this to set up email/password login.
+            </Text> */}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Clerk WebView Modal */}
       <Modal
@@ -334,6 +489,14 @@ const styles = StyleSheet.create({
     DRSLogo: {
     width: 120,
     height: 120,
+  },
+  loginText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    // marginTop: 16,
+    marginBottom: 16,
   },
   container: {
     flex: 1,
@@ -501,5 +664,104 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: '#666',
     fontSize: 14,
+  },
+  // Email Login Button styles
+  emailButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#71717a',
+    paddingVertical: 14,
+    borderRadius: 30,
+    marginBottom: 12,
+  },
+  emailButtonPressed: {
+    backgroundColor: 'rgba(113, 113, 122, 0.2)',
+  },
+  emailIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  emailButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Email Modal styles
+  emailModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  emailModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#18181b',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  emailModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  emailModalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  emailModalClose: {
+    fontSize: 24,
+    color: '#71717a',
+    padding: 4,
+  },
+  emailModalSubtitle: {
+    fontSize: 14,
+    color: '#71717a',
+    marginBottom: 24,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: '#27272a',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  emailLoginButton: {
+    paddingVertical: 16,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  emailLoginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  emailModalNote: {
+    fontSize: 12,
+    color: '#71717a',
+    textAlign: 'center',
   },
 });

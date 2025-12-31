@@ -19,10 +19,13 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
+import { useAuthStore } from '../store/useAuthStore';
 import axiosInstance from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
 
 const DRSLogo = require('../assets/DRS-Logo.png');
+
+const SUPER_ADMIN_EMAIL = 'deenuramenjes29@gmail.com';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,11 +39,15 @@ interface Stats {
 export const AdminScreen = () => {
   const navigation = useNavigation();
   const { colors: themeColors } = useThemeStore();
+  const { user } = useAuthStore();
   const { dialogState, hideDialog, showSuccess, showError } = useDialog();
-  
+
+  // Check if current user is super admin
+  const isSuperAdmin = user?.emailAddress === SUPER_ADMIN_EMAIL;
+
   // Splash screen state
   const [showSplash, setShowSplash] = useState(true);
-  
+
   // Animation values
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const iconScale = useRef(new Animated.Value(0)).current;
@@ -50,11 +57,11 @@ export const AdminScreen = () => {
   const subtitleOpacity = useRef(new Animated.Value(0)).current;
   const subtitleTranslateY = useRef(new Animated.Value(20)).current;
   const shimmerOpacity = useRef(new Animated.Value(0)).current;
-  
+
   // Stats state
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
-  
+
   // Notification modal state
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [notificationTitle, setNotificationTitle] = useState('');
@@ -187,7 +194,7 @@ export const AdminScreen = () => {
         message: notificationMessage.trim(),
         imageUrl: notificationImageUrl.trim() || undefined,
       });
-      
+
       const connectedCount = response.data?.connectedClients || 0;
       setNotificationTitle('');
       setNotificationMessage('');
@@ -203,39 +210,46 @@ export const AdminScreen = () => {
   };
 
   const adminMenuItems = [
-    { 
-      icon: 'music', 
-      label: 'Manage Songs', 
+    {
+      icon: 'music',
+      label: 'Manage Songs',
       description: 'Add, edit, or remove songs',
       onPress: () => (navigation as any).navigate('ManageSongs'),
     },
-    { 
-      icon: 'disc', 
-      label: 'Manage Albums', 
+    {
+      icon: 'disc',
+      label: 'Manage Albums',
       description: 'Create and manage albums',
       onPress: () => (navigation as any).navigate('ManageAlbums'),
     },
-    { 
-      icon: 'users', 
-      label: 'Manage Users', 
+    {
+      icon: 'users',
+      label: 'Manage Users',
       description: 'View and manage user accounts',
       onPress: () => (navigation as any).navigate('ManageUsers'),
     },
-    { 
-      icon: 'upload', 
-      label: 'Upload Music', 
+    // Only show Admin Access to super admin
+    ...(isSuperAdmin ? [{
+      icon: 'shield',
+      label: 'Admin Access',
+      description: 'Manage admin privileges',
+      onPress: () => (navigation as any).navigate('AdminAccess'),
+    }] : []),
+    {
+      icon: 'upload',
+      label: 'Upload Music',
       description: 'Upload new songs to the library',
       onPress: () => (navigation as any).navigate('UploadSong'),
     },
-    { 
-      icon: 'bell', 
-      label: 'Send Notification', 
+    {
+      icon: 'bell',
+      label: 'Send Notification',
       description: 'Send broadcast notification to all users',
       onPress: () => setIsNotificationModalOpen(true),
     },
-    { 
-      icon: 'check-square', 
-      label: 'Todo List', 
+    {
+      icon: 'check-square',
+      label: 'Todo List',
       description: 'Manage development tasks and todos',
       onPress: () => (navigation as any).navigate('Todo'),
     },
@@ -251,13 +265,13 @@ export const AdminScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
+
       {/* Welcome Splash Screen */}
       {showSplash && (
-        <Animated.View 
+        <Animated.View
           style={[
-            styles.splashContainer, 
-            { 
+            styles.splashContainer,
+            {
               opacity: splashOpacity,
               backgroundColor: COLORS.background,
             }
@@ -266,9 +280,9 @@ export const AdminScreen = () => {
         >
           {/* Gradient Background Overlay */}
           <View style={[styles.splashGradient, { backgroundColor: themeColors.primaryMuted }]} />
-          
+
           {/* Animated Icon */}
-          <Animated.View 
+          <Animated.View
             style={[
               styles.splashIconContainer,
               {
@@ -283,9 +297,9 @@ export const AdminScreen = () => {
             <Image source={DRSLogo} style={styles.DRSLogo} />
             {/* <Icon name="headphones" size={64} color={themeColors.primary} /> */}
           </Animated.View>
-          
+
           {/* Title */}
-          <Animated.Text 
+          <Animated.Text
             style={[
               styles.splashTitle,
               {
@@ -296,7 +310,7 @@ export const AdminScreen = () => {
           >
             Welcome to
           </Animated.Text>
-          
+
           {/* Subtitle with gradient effect */}
           <Animated.View
             style={{
@@ -304,20 +318,20 @@ export const AdminScreen = () => {
               transform: [{ translateY: subtitleTranslateY }],
             }}
           >
-            <Animated.Text 
+            <Animated.Text
               style={[
-                styles.splashSubtitle, 
+                styles.splashSubtitle,
                 { color: themeColors.primary }
               ]}
             >
               Admin Panel
             </Animated.Text>
           </Animated.View>
-          
+
           {/* Music Sound Wave Animation */}
           <View style={styles.soundWaveContainer}>
             {[0, 1, 2, 3, 4].map((i) => (
-              <Animated.View 
+              <Animated.View
                 key={i}
                 style={[
                   styles.soundWaveBar,
@@ -330,7 +344,7 @@ export const AdminScreen = () => {
               />
             ))}
           </View>
-          <Animated.View 
+          <Animated.View
             style={[
               styles.taglineContainer,
               {
@@ -344,11 +358,11 @@ export const AdminScreen = () => {
           </Animated.View>
         </Animated.View>
       )}
-      
+
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()} 
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
           <Icon name="arrow-left" size={24} color={COLORS.textPrimary} />
@@ -359,7 +373,7 @@ export const AdminScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -413,7 +427,7 @@ export const AdminScreen = () => {
         <Text style={styles.sectionTitle}>Management</Text>
         <View style={styles.menuContainer}>
           {adminMenuItems.map((item, index) => (
-            <TouchableOpacity 
+            <TouchableOpacity
               key={index}
               style={styles.menuItem}
               activeOpacity={0.7}
@@ -495,15 +509,15 @@ export const AdminScreen = () => {
             </View>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => setIsNotificationModalOpen(false)}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
-                  styles.sendButton, 
+                  styles.sendButton,
                   { backgroundColor: themeColors.primary },
                   isSendingNotification && styles.sendButtonDisabled
                 ]}
@@ -538,7 +552,7 @@ export const AdminScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    DRSLogo: {
+  DRSLogo: {
     width: 100,
     height: 100,
   },

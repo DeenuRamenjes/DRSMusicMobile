@@ -27,19 +27,21 @@ interface ConnectionScreenProps {
 }
 
 export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenProps) => {
-  const { 
-    isConnecting, 
-    connectionError, 
-    retryCount, 
+  const {
+    isConnecting,
+    connectionError,
+    retryCount,
     maxRetries,
-    checkConnection 
+    checkConnection,
+    currentServerName,
+    initializeConnection
   } = useConnectionStore();
   const { colors: themeColors } = useThemeStore();
   const { downloadedSongs, setOfflineMode } = useOfflineMusicStore();
   const { selectedServerId, setSelectedServer, loadSelectedServer } = useBackendStore();
   const { dialogState, hideDialog, showError, showConfirm } = useDialog();
   const [serverMenuVisible, setServerMenuVisible] = useState(false);
-  
+
   // Pulsing animation for the icon
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
   const spinAnim = React.useRef(new Animated.Value(0)).current;
@@ -98,9 +100,9 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
       setServerMenuVisible(false);
       return;
     }
-    
+
     setServerMenuVisible(false);
-    
+
     const server = BACKEND_SERVERS.find(s => s.id === serverId);
     showConfirm(
       'Switch Server',
@@ -131,24 +133,24 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
     <View style={styles.container}>
       <View style={styles.content}>
         {/* Animated Icon */}
-        <Animated.View 
+        <Animated.View
           style={[
             styles.iconContainer,
-            { 
+            {
               transform: [
                 { rotate: spin }
-              ] 
+              ]
             }
           ]}
         >
-            <Image source={DRSLogo} style={{ width: 100, height: 100 }} />
+          <Image source={DRSLogo} style={{ width: 100, height: 100 }} />
         </Animated.View>
 
         {/* Status Text */}
         <Text style={styles.title}>
           {isMaxRetriesReached ? 'Unable to Connect' : 'Connecting to Server'}
         </Text>
-        
+
         <Text style={styles.subtitle}>
           {connectionError || 'Please wait while we connect to the server...'}
         </Text>
@@ -156,12 +158,12 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
         {/* Progress Indicator */}
         {!isMaxRetriesReached && (
           <View style={styles.progressContainer}>
-            <ActivityIndicator 
-              size="small" 
-              color={themeColors.primary} 
+            <ActivityIndicator
+              size="small"
+              color={themeColors.primary}
             />
             <Text style={styles.progressText}>
-              Attempt {retryCount + 1} of {maxRetries}
+              {currentServerName ? `Trying ${currentServerName}...` : `Attempt ${retryCount + 1} of ${maxRetries}`}
             </Text>
           </View>
         )}
@@ -170,14 +172,14 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
         <View style={[styles.infoBox, { backgroundColor: themeColors.primaryMuted }]}>
           <Icon name="info" size={16} color={themeColors.primary} />
           <Text style={[styles.infoText, { color: themeColors.primary }]}>
-            The server uses a free plan and may take up to 1 Minute to wake up. 
+            The server uses a free plan and may take up to 1 Minute to wake up.
             Thanks for your patience!
           </Text>
         </View>
 
         {/* Retry Button (shown after max retries) */}
         {isMaxRetriesReached && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: themeColors.primary }]}
             onPress={handleRetry}
           >
@@ -187,7 +189,7 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
         )}
 
         {/* Offline Mode Option */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.offlineButton,
             hasDownloadedSongs && { backgroundColor: themeColors.primaryMuted, paddingHorizontal: SPACING.lg, borderRadius: 30 }
@@ -199,7 +201,7 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
             styles.offlineButtonText,
             hasDownloadedSongs && { color: themeColors.primary, fontWeight: '600' }
           ]}>
-            {hasDownloadedSongs 
+            {hasDownloadedSongs
               ? `Use Offline Mode (${downloadedSongs.length} songs)`
               : 'Use Offline Mode'
             }
@@ -208,7 +210,7 @@ export const ConnectionScreen = ({ onRetry, onOfflinePress }: ConnectionScreenPr
 
         {/* Server Selection - Only show when using deployment */}
         {USE_DEPLOYMENT && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.serverButton}
             onPress={() => setServerMenuVisible(true)}
           >

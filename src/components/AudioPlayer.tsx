@@ -10,6 +10,7 @@ import TrackPlayer, {
 } from 'react-native-track-player';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useFriendsStore } from '../store/useFriendsStore';
+import { useEqualizerStore } from '../store/useEqualizerStore';
 import { getFullAudioUrl, getFullImageUrl } from '../config';
 
 // Track if TrackPlayer is initialized
@@ -64,6 +65,12 @@ export const setupTrackPlayer = async (): Promise<boolean> => {
         await TrackPlayer.setRepeatMode(RepeatMode.Off);
 
         isTrackPlayerInitialized = true;
+
+        // Initialize equalizer with audio session 0 (default output mix)
+        // This allows the EQ to apply to the system audio output
+        const eqStore = useEqualizerStore.getState();
+        await eqStore.initializeNative(0);
+
         return true;
     } catch (error) {
         console.error('[TrackPlayer] Setup error:', error);
@@ -100,7 +107,7 @@ export const AudioPlayer = () => {
     useEffect(() => {
         const initialize = async () => {
             if (isInitializedRef.current) return;
-            
+
             const success = await setupTrackPlayer();
             if (success) {
                 isInitializedRef.current = true;
@@ -137,7 +144,7 @@ export const AudioPlayer = () => {
                     return;
                 }
                 lastPlayNextTimeRef.current = now;
-                
+
                 usePlayerStore.getState().playNext();
             }
         }
@@ -161,7 +168,7 @@ export const AudioPlayer = () => {
         const interval = setInterval(() => {
             const now = Date.now();
             const elapsed = Math.floor((now - lastListeningUpdateRef.current) / 1000);
-            
+
             // Only add if at least 10 seconds have passed
             if (elapsed >= 10) {
                 addListeningTime(elapsed);
@@ -184,7 +191,7 @@ export const AudioPlayer = () => {
         if (!crossfade || !isPlaying || !progress.duration) return;
 
         const timeRemaining = progress.duration - progress.position;
-        
+
         // If we're within crossfade range and haven't triggered yet
         if (timeRemaining <= CROSSFADE_DURATION && timeRemaining > 0.5) {
             // Start fading out volume
@@ -197,7 +204,7 @@ export const AudioPlayer = () => {
                     currentStep++;
                     const newVolume = Math.max(0, 1 - (currentStep / fadeSteps));
                     await TrackPlayer.setVolume(newVolume);
-                    
+
                     if (currentStep < fadeSteps) {
                         crossfadeTimeoutRef.current = setTimeout(fadeOut, fadeInterval);
                     }
@@ -220,7 +227,7 @@ export const AudioPlayer = () => {
     // Reset volume when song changes (after crossfade)
     useEffect(() => {
         if (currentSong && isInitializedRef.current) {
-            TrackPlayer.setVolume(1).catch(() => {});
+            TrackPlayer.setVolume(1).catch(() => { });
         }
     }, [currentSong?._id]);
 
@@ -244,8 +251,8 @@ export const AudioPlayer = () => {
                     url: audioUrl,
                     title: currentSong.title || 'Unknown Title',
                     artist: currentSong.artist || 'Unknown Artist',
-                    artwork: currentSong.imageUrl 
-                        ? getFullImageUrl(currentSong.imageUrl) 
+                    artwork: currentSong.imageUrl
+                        ? getFullImageUrl(currentSong.imageUrl)
                         : undefined,
                     duration: currentSong.duration || 0,
                 };
@@ -267,7 +274,7 @@ export const AudioPlayer = () => {
                 );
             } catch (error) {
                 console.error('[TrackPlayer] Error loading track:', error);
-                
+
                 // Fallback to reset approach if load fails
                 try {
                     await TrackPlayer.reset();
@@ -276,8 +283,8 @@ export const AudioPlayer = () => {
                         url: audioUrl,
                         title: currentSong.title || 'Unknown Title',
                         artist: currentSong.artist || 'Unknown Artist',
-                        artwork: currentSong.imageUrl 
-                            ? getFullImageUrl(currentSong.imageUrl) 
+                        artwork: currentSong.imageUrl
+                            ? getFullImageUrl(currentSong.imageUrl)
                             : undefined,
                         duration: currentSong.duration || 0,
                     });
@@ -299,7 +306,7 @@ export const AudioPlayer = () => {
     useEffect(() => {
         // Skip sync if not initialized or loading a new track
         if (!isInitializedRef.current || isLoadingTrackRef.current) return;
-        
+
         const syncPlayState = async () => {
             try {
                 if (isPlaying) {
@@ -330,7 +337,7 @@ export const AudioPlayer = () => {
             const timeDiff = Math.abs(state.currentTime - prevState.currentTime);
             // If time changed by more than 1 second, it's likely a seek
             if (timeDiff > 1 && isInitializedRef.current) {
-                TrackPlayer.seekTo(state.currentTime).catch(() => {});
+                TrackPlayer.seekTo(state.currentTime).catch(() => { });
             }
         });
 

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   FlatList,
   Share,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -25,14 +26,25 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { useMusicStore } from '../store/useMusicStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { getFullImageUrl, getFullAudioUrl } from '../config';
 import { Song } from '../types';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+import axiosInstance from '../api/axios';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Album art sizing based on screen width
 const ALBUM_ART_SIZE = Math.min(SCREEN_WIDTH - SPACING.xxl * 2, 320);
+
+// User type for share list
+interface ShareUser {
+  _id: string;
+  clerkId: string;
+  name: string;
+  email?: string;
+  image?: string;
+}
 
 export const SongDetailScreen = () => {
   const navigation = useNavigation();
@@ -41,8 +53,13 @@ export const SongDetailScreen = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDownloadOptionsOpen, setIsDownloadOptionsOpen] = useState(false);
+  const [isShareUsersOpen, setIsShareUsersOpen] = useState(false);
+  const [shareUsers, setShareUsers] = useState<ShareUser[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isSending, setIsSending] = useState<string | null>(null); // Track which user we're sending to
+  const [queueItemMenuId, setQueueItemMenuId] = useState<string | null>(null); // Track which queue item has menu open
   const { dialogState, hideDialog, showSuccess, showError, showConfirm } = useDialog();
-  
+
   const {
     currentSong,
     isPlaying,
@@ -64,11 +81,14 @@ export const SongDetailScreen = () => {
     isMuted,
     setVolume,
     toggleMute,
+    removeFromQueue,
+    moveToNextInQueue,
   } = usePlayerStore();
 
   const { likedSongs, likeSong, unlikeSong } = useMusicStore();
   const { colors: themeColors } = useThemeStore();
   const { isDownloaded, downloadSong, deleteSong, downloadProgress } = useOfflineMusicStore();
+  const { user: currentUser } = useAuthStore();
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   const isSongLiked = currentSong ? likedSongs.some(s => s._id === currentSong._id) : false;
@@ -107,13 +127,13 @@ export const SongDetailScreen = () => {
   // Handle seek when user taps on progress bar
   const handleSeek = (event: GestureResponderEvent) => {
     if (!progressBarLayout.current || duration <= 0) return;
-    
+
     const { locationX } = event.nativeEvent;
     const barWidth = progressBarLayout.current.width;
-    
+
     const seekPercent = Math.max(0, Math.min(1, locationX / barWidth));
     const seekPosition = seekPercent * duration;
-    
+
     seekTo(seekPosition);
   };
 
@@ -140,19 +160,78 @@ export const SongDetailScreen = () => {
   const handlePlayFromQueue = (song: Song) => {
     playSong(song);
     setIsQueueOpen(false);
+    setQueueItemMenuId(null);
   };
 
-  const handleShare = async () => {
+  // External share (OS share sheet)
+  const handleExternalShare = async () => {
     if (!currentSong) return;
     try {
+      const webAppUrl = 'https://drs-music-player.onrender.com';
+      const songShareUrl = `${webAppUrl}/songs/${currentSong._id}`;
+
       await Share.share({
-        message: `🎵 Listen to "${currentSong.title}" by ${currentSong.artist} on DRS Music!`,
+        message: `🎵 Listen to "${currentSong.title}" by ${currentSong.artist} on DRS Music!\n\n${songShareUrl}`,
         title: currentSong.title,
+        url: songShareUrl, // iOS uses this for the share URL
       });
     } catch (error) {
       console.error('Error sharing:', error);
     }
     setIsMenuOpen(false);
+  };
+
+  // Open in-app share modal (share with users)
+  const handleShare = async () => {
+    if (!currentSong) return;
+    setIsMenuOpen(false);
+    setIsShareUsersOpen(true);
+
+    // Fetch users
+    setIsLoadingUsers(true);
+    try {
+      const response = await axiosInstance.get('/users');
+      // Filter out the current user from the list
+      const users = (response.data || []).filter((u: ShareUser) =>
+        u.clerkId !== currentUser?.clerkId && u._id !== currentUser?.id
+      );
+      setShareUsers(users);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      showError('Error', 'Failed to load users');
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  // Send song to a specific user
+  const handleSendToUser = async (user: ShareUser) => {
+    if (!currentSong) return;
+
+    setIsSending(user._id);
+    try {
+      await axiosInstance.post('/users/messages', {
+        receiverId: user.clerkId,
+        content: `🎵 Check out this song: "${currentSong.title}" by ${currentSong.artist}`,
+        messageType: 'song',
+        songData: {
+          songId: currentSong._id,
+          title: currentSong.title,
+          artist: currentSong.artist,
+          imageUrl: currentSong.imageUrl,
+          audioUrl: currentSong.audioUrl,
+          duration: currentSong.duration,
+        }
+      });
+
+      showSuccess('Sent!', `Song sent to ${user.name}`);
+      setIsShareUsersOpen(false);
+    } catch (error: any) {
+      console.error('Error sending song:', error);
+      showError('Error', error.response?.data?.message || 'Failed to send song');
+    } finally {
+      setIsSending(null);
+    }
   };
 
   const handleViewLyrics = () => {
@@ -192,11 +271,11 @@ export const SongDetailScreen = () => {
     if (!currentSong) return;
     setIsDownloadOptionsOpen(false);
     setIsDownloading(true);
-    
+
     try {
       const audioUrl = getFullAudioUrl(currentSong.audioUrl);
       const success = await downloadSong(currentSong, audioUrl);
-      
+
       if (success) {
         showSuccess('Download Complete', `"${currentSong.title}" is now available offline!`);
       } else {
@@ -215,21 +294,21 @@ export const SongDetailScreen = () => {
     if (!currentSong) return;
     setIsDownloadOptionsOpen(false);
     setIsDownloading(true);
-    
+
     try {
       const audioUrl = getFullAudioUrl(currentSong.audioUrl);
       const RNFS = require('react-native-fs');
-      
+
       // Create filename from song title
       const sanitizedTitle = currentSong.title.replace(/[/\\?%*:|"<>]/g, '-');
       const filename = `${sanitizedTitle} - ${currentSong.artist}.mp3`;
-      
+
       // Determine download path based on platform
-      const downloadDir = Platform.OS === 'android' 
-        ? RNFS.DownloadDirectoryPath 
+      const downloadDir = Platform.OS === 'android'
+        ? RNFS.DownloadDirectoryPath
         : RNFS.DocumentDirectoryPath;
       const filePath = `${downloadDir}/${filename}`;
-      
+
       // Check if file already exists
       const exists = await RNFS.exists(filePath);
       if (exists) {
@@ -246,7 +325,7 @@ export const SongDetailScreen = () => {
         setIsDownloading(false);
         return;
       }
-      
+
       await performDeviceDownload(audioUrl, filePath, filename);
     } catch (error) {
       console.error('Device download error:', error);
@@ -258,14 +337,14 @@ export const SongDetailScreen = () => {
   const performDeviceDownload = async (audioUrl: string, filePath: string, filename: string) => {
     try {
       const RNFS = require('react-native-fs');
-      
+
       const downloadResult = await RNFS.downloadFile({
         fromUrl: audioUrl,
         toFile: filePath,
         background: true,
         discretionary: true,
       }).promise;
-      
+
       if (downloadResult.statusCode === 200) {
         showSuccess('Downloaded to Device', `"${filename}" has been saved to your ${Platform.OS === 'android' ? 'Downloads' : 'Documents'} folder!`);
       } else {
@@ -300,25 +379,67 @@ export const SongDetailScreen = () => {
   const imageUri = getFullImageUrl(currentSong.imageUrl);
 
   const renderQueueItem = ({ item, index }: { item: Song; index: number }) => {
+    const isMenuVisible = queueItemMenuId === item._id;
+
+    const handlePlayNextPress = () => {
+      moveToNextInQueue(item._id);
+      setQueueItemMenuId(null);
+    };
+
+    const handleRemovePress = () => {
+      removeFromQueue(item._id);
+      setQueueItemMenuId(null);
+    };
+
     return (
-      <TouchableOpacity
-        style={styles.queueItem}
-        onPress={() => handlePlayFromQueue(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.queueItemIndex}>
-          <Text style={styles.queueItemIndexText}>{index + 1}</Text>
-        </View>
-        <Image
-          source={{ uri: getFullImageUrl(item.imageUrl) }}
-          style={styles.queueItemImage}
-        />
-        <View style={styles.queueItemInfo}>
-          <Text style={styles.queueItemTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.queueItemArtist} numberOfLines={1}>{item.artist}</Text>
-        </View>
-        <Text style={styles.queueItemDuration}>{formatTime(item.duration || 0)}</Text>
-      </TouchableOpacity>
+      <View style={styles.queueItemWrapper}>
+        <TouchableOpacity
+          style={styles.queueItem}
+          onPress={() => handlePlayFromQueue(item)}
+          onLongPress={() => setQueueItemMenuId(isMenuVisible ? null : item._id)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.queueItemIndex}>
+            <Text style={styles.queueItemIndexText}>{index + 1}</Text>
+          </View>
+          <Image
+            source={{ uri: getFullImageUrl(item.imageUrl) }}
+            style={styles.queueItemImage}
+          />
+          <View style={styles.queueItemInfo}>
+            <Text style={styles.queueItemTitle} numberOfLines={1}>{item.title}</Text>
+            <Text style={styles.queueItemArtist} numberOfLines={1}>{item.artist}</Text>
+          </View>
+          <Text style={styles.queueItemDuration}>{formatTime(item.duration || 0)}</Text>
+          <TouchableOpacity
+            style={styles.queueItemMenuButton}
+            onPress={() => setQueueItemMenuId(isMenuVisible ? null : item._id)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Icon name="more-vertical" size={18} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        </TouchableOpacity>
+
+        {/* Dropdown Menu */}
+        {isMenuVisible && (
+          <View style={styles.queueItemMenu}>
+            <TouchableOpacity
+              style={styles.queueItemMenuOption}
+              onPress={handlePlayNextPress}
+            >
+              <Icon name="skip-forward" size={16} color={COLORS.textPrimary} />
+              <Text style={styles.queueItemMenuText}>Play Next</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.queueItemMenuOption}
+              onPress={handleRemovePress}
+            >
+              <Icon name="trash-2" size={16} color={COLORS.error} />
+              <Text style={[styles.queueItemMenuText, { color: COLORS.error }]}>Remove from Queue</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     );
   };
 
@@ -335,17 +456,17 @@ export const SongDetailScreen = () => {
           <View style={styles.backgroundOverlay} />
         </ImageBackground>
       )}
-      
+
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        
+
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <Icon name="chevron-down" size={28} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>NOW PLAYING</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.menuButton}
             onPress={() => setIsMenuOpen(true)}
           >
@@ -353,362 +474,472 @@ export const SongDetailScreen = () => {
           </TouchableOpacity>
         </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Album Art */}
-        <View style={styles.albumArtContainer}>
-          {imageUri ? (
-            <Image
-              source={{ uri: imageUri }}
-              style={styles.albumArt}
-            />
-          ) : (
-            <View style={[styles.albumArt, styles.albumArtPlaceholder]}>
-              <Icon name="music" size={64} color={COLORS.textMuted} />
-            </View>
-          )}
-        </View>
-
-        {/* Song Info */}
-        <View style={styles.songInfoContainer}>
-          <Text style={styles.songTitle} numberOfLines={2}>{currentSong.title}</Text>
-          <Text style={styles.songArtist} numberOfLines={1}>{currentSong.artist}</Text>
-        </View>
-
-        {/* Progress Bar */}
-        <View style={styles.progressSection}>
-          <TouchableOpacity 
-            ref={progressBarRef}
-            style={styles.progressBar}
-            onLayout={(event) => {
-              progressBarLayout.current = event.nativeEvent.layout;
-            }}
-            onPress={handleSeek}
-            activeOpacity={0.9}
-          >
-            <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
-            <View style={[styles.progressHandle, { left: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
-          </TouchableOpacity>
-          <View style={styles.timeContainer}>
-            <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-            <Text style={styles.timeText}>{formatTime(duration)}</Text>
-          </View>
-        </View>
-
-        {/* Main Controls */}
-        <View style={styles.mainControls}>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={toggleShuffle}
-          >
-            <Icon 
-              name="shuffle" 
-              size={22} 
-              color={isShuffle ? themeColors.primary : COLORS.textMuted} 
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.controlButton} onPress={playPrevious}>
-            <Icon name="skip-back" size={32} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.playButton, { backgroundColor: themeColors.primary }]} onPress={togglePlayPause}>
-            <Icon 
-              name={isPlaying ? 'pause' : 'play'} 
-              size={32} 
-              color={COLORS.background} 
-              style={!isPlaying && styles.playIconOffset}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.controlButton} onPress={playNext}>
-            <Icon name="skip-forward" size={32} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={toggleLoop}
-          >
-            <Icon 
-              name="repeat" 
-              size={22} 
-              color={isLooping ? themeColors.primary : COLORS.textMuted} 
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Bottom Actions */}
-        <View style={styles.bottomActions}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleToggleLike}>
-            <Icon 
-              name="heart" 
-              size={24} 
-              color={isSongLiked ? '#f43f5e' : COLORS.textMuted}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => setIsVolumeOpen(true)}
-          >
-            <Icon 
-              name={isMuted || volume === 0 ? "volume-x" : "volume-2"} 
-              size={24} 
-              color={COLORS.textMuted} 
-            />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => setIsQueueOpen(true)}
-          >
-            <Icon name="list" size={24} color={COLORS.textMuted} />
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {/* Volume Modal */}
-      <Modal
-        visible={isVolumeOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setIsVolumeOpen(false)}
-      >
-        <TouchableOpacity 
-          style={styles.volumeModalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsVolumeOpen(false)}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.volumePanel}>
-            <View style={styles.volumeHeader}>
-              <Icon name="volume-2" size={20} color={COLORS.textPrimary} />
-              <Text style={styles.volumeTitle}>Volume</Text>
-            </View>
-            
-            <View style={styles.volumeSliderContainer}>
-              <Icon name="volume" size={18} color={COLORS.textMuted} />
-              <Slider
-                style={styles.volumeSlider}
-                minimumValue={0}
-                maximumValue={1}
-                value={isMuted ? 0 : volume}
-                onValueChange={handleVolumeChange}
-                minimumTrackTintColor={themeColors.primary}
-                maximumTrackTintColor="rgba(255,255,255,0.2)"
-                thumbTintColor={COLORS.textPrimary}
+          {/* Album Art */}
+          <View style={styles.albumArtContainer}>
+            {imageUri ? (
+              <Image
+                source={{ uri: imageUri }}
+                style={styles.albumArt}
               />
-              <Icon name="volume-2" size={18} color={COLORS.textMuted} />
-            </View>
-            
-            <View style={styles.volumeFooter}>
-              <Text style={styles.volumePercent}>
-                {Math.round((isMuted ? 0 : volume) * 100)}%
-              </Text>
-              <TouchableOpacity 
-                style={styles.muteButton}
-                onPress={toggleMute}
-              >
-                <Icon 
-                  name={isMuted ? "volume-x" : "volume-2"} 
-                  size={20} 
-                  color={isMuted ? themeColors.primary : COLORS.textMuted} 
-                />
-                <Text style={[styles.muteText, isMuted && { color: themeColors.primary }]}>
-                  {isMuted ? 'Unmute' : 'Mute'}
-                </Text>
-              </TouchableOpacity>
+            ) : (
+              <View style={[styles.albumArt, styles.albumArtPlaceholder]}>
+                <Icon name="music" size={64} color={COLORS.textMuted} />
+              </View>
+            )}
+          </View>
+
+          {/* Song Info */}
+          <View style={styles.songInfoContainer}>
+            <Text style={styles.songTitle} numberOfLines={2}>{currentSong.title}</Text>
+            <Text style={styles.songArtist} numberOfLines={1}>{currentSong.artist}</Text>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={styles.progressSection}>
+            <TouchableOpacity
+              ref={progressBarRef}
+              style={styles.progressBar}
+              onLayout={(event) => {
+                progressBarLayout.current = event.nativeEvent.layout;
+              }}
+              onPress={handleSeek}
+              activeOpacity={0.9}
+              hitSlop={{ top: 20, bottom: 20, left: 0, right: 0 }}
+            >
+              <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
+              <View style={[styles.progressHandle, { left: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
+            </TouchableOpacity>
+            <View style={styles.timeContainer}>
+              <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+              <Text style={styles.timeText}>{formatTime(duration)}</Text>
             </View>
           </View>
-        </TouchableOpacity>
-      </Modal>
 
-      {/* Menu Modal */}
-      <Modal
-        visible={isMenuOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setIsMenuOpen(false)}
-      >
-        <View style={styles.menuModalOverlay}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setIsMenuOpen(false)}
-          />
-          <View style={styles.menuPanel}>
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={handleShare}
+          {/* Main Controls */}
+          <View style={styles.mainControls}>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={toggleShuffle}
             >
-              <Icon name="share" size={20} color={COLORS.textPrimary} />
-              <Text style={styles.menuItemText}>Share song</Text>
+              <Icon
+                name="shuffle"
+                size={22}
+                color={isShuffle ? themeColors.primary : COLORS.textMuted}
+              />
             </TouchableOpacity>
-            
-            {/* <TouchableOpacity 
+
+            <TouchableOpacity style={styles.controlButton} onPress={playPrevious}>
+              <Icon name="skip-back" size={32} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.playButton, { backgroundColor: themeColors.primary }]} onPress={togglePlayPause}>
+              <Icon
+                name={isPlaying ? 'pause' : 'play'}
+                size={32}
+                color={COLORS.background}
+                style={!isPlaying && styles.playIconOffset}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.controlButton} onPress={playNext}>
+              <Icon name="skip-forward" size={32} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={toggleLoop}
+            >
+              <Icon
+                name="repeat"
+                size={22}
+                color={isLooping ? themeColors.primary : COLORS.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Bottom Actions */}
+          <View style={styles.bottomActions}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleToggleLike}>
+              <Icon
+                name="heart"
+                size={24}
+                color={isSongLiked ? '#f43f5e' : COLORS.textMuted}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setIsVolumeOpen(true)}
+            >
+              <Icon
+                name={isMuted || volume === 0 ? "volume-x" : "volume-2"}
+                size={24}
+                color={COLORS.textMuted}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setIsQueueOpen(true)}
+            >
+              <Icon name="list" size={24} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Volume Modal */}
+        <Modal
+          visible={isVolumeOpen}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setIsVolumeOpen(false)}
+        >
+          <TouchableOpacity
+            style={styles.volumeModalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsVolumeOpen(false)}
+          >
+            <View style={styles.volumePanel}>
+              <View style={styles.volumeHeader}>
+                <Icon name="volume-2" size={20} color={COLORS.textPrimary} />
+                <Text style={styles.volumeTitle}>Volume</Text>
+              </View>
+
+              <View style={styles.volumeSliderContainer}>
+                <Icon name="volume" size={18} color={COLORS.textMuted} />
+                <Slider
+                  style={styles.volumeSlider}
+                  minimumValue={0}
+                  maximumValue={1}
+                  value={isMuted ? 0 : volume}
+                  onValueChange={handleVolumeChange}
+                  minimumTrackTintColor={themeColors.primary}
+                  maximumTrackTintColor="rgba(255,255,255,0.2)"
+                  thumbTintColor={COLORS.textPrimary}
+                />
+                <Icon name="volume-2" size={18} color={COLORS.textMuted} />
+              </View>
+
+              <View style={styles.volumeFooter}>
+                <Text style={styles.volumePercent}>
+                  {Math.round((isMuted ? 0 : volume) * 100)}%
+                </Text>
+                <TouchableOpacity
+                  style={styles.muteButton}
+                  onPress={toggleMute}
+                >
+                  <Icon
+                    name={isMuted ? "volume-x" : "volume-2"}
+                    size={20}
+                    color={isMuted ? themeColors.primary : COLORS.textMuted}
+                  />
+                  <Text style={[styles.muteText, isMuted && { color: themeColors.primary }]}>
+                    {isMuted ? 'Unmute' : 'Mute'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Menu Modal */}
+        <Modal
+          visible={isMenuOpen}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setIsMenuOpen(false)}
+        >
+          <View style={styles.menuModalOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setIsMenuOpen(false)}
+            />
+            <View style={styles.menuPanel}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={handleShare}
+              >
+                <Icon name="share" size={20} color={COLORS.textPrimary} />
+                <Text style={styles.menuItemText}>Share song</Text>
+              </TouchableOpacity>
+
+              {/* <TouchableOpacity 
               style={styles.menuItem}
               onPress={handleViewLyrics}
             >
               <Icon name="file-text" size={20} color={COLORS.textPrimary} />
               <Text style={styles.menuItemText}>View Lyrics</Text>
             </TouchableOpacity> */}
-            
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={handleDownload}
-              disabled={isDownloading}
-            >
-              <Icon 
-                name={currentSong && isDownloaded(currentSong._id) ? "check-circle" : "download"} 
-                size={20} 
-                color={currentSong && isDownloaded(currentSong._id) ? themeColors.primary : COLORS.textPrimary} 
-              />
-              <Text style={[
-                styles.menuItemText,
-                currentSong && isDownloaded(currentSong._id) && { color: themeColors.primary }
-              ]}>
-                {isDownloading 
-                  ? `Downloading... ${downloadProgress[currentSong?._id || '']?.progress || 0}%`
-                  : currentSong && isDownloaded(currentSong._id)
-                    ? 'Downloaded'
-                    : 'Download'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
-      {/* Download Options Modal */}
-      <Modal
-        visible={isDownloadOptionsOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setIsDownloadOptionsOpen(false)}
-      >
-        <View style={styles.downloadOptionsOverlay}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setIsDownloadOptionsOpen(false)}
-          />
-          <View style={styles.downloadOptionsPanel}>
-            <Text style={styles.downloadOptionsTitle}>Download Options</Text>
-            <Text style={styles.downloadOptionsSubtitle}>
-              Choose how you want to save "{currentSong?.title}"
-            </Text>
-            
-            {/* Offline Viewing Option */}
-            <TouchableOpacity 
-              style={styles.downloadOption}
-              onPress={handleOfflineDownload}
-            >
-              <View style={[styles.downloadOptionIcon, { backgroundColor: themeColors.primaryMuted }]}>
-                <Icon name="smartphone" size={24} color={themeColors.primary} />
-              </View>
-              <View style={styles.downloadOptionInfo}>
-                <Text style={styles.downloadOptionTitle}>Offline Viewing</Text>
-                <Text style={styles.downloadOptionDesc}>
-                  Save for offline playback within the app
-                </Text>
-              </View>
-              <Icon name="chevron-right" size={20} color={COLORS.textMuted} />
-            </TouchableOpacity>
-            
-            {/* Download to Device Option */}
-            <TouchableOpacity 
-              style={styles.downloadOption}
-              onPress={handleDeviceDownload}
-            >
-              <View style={[styles.downloadOptionIcon, { backgroundColor: 'rgba(59, 130, 246, 0.2)' }]}>
-                <Icon name="download" size={24} color="#3b82f6" />
-              </View>
-              <View style={styles.downloadOptionInfo}>
-                <Text style={styles.downloadOptionTitle}>Save to Device</Text>
-                <Text style={styles.downloadOptionDesc}>
-                  Download to your {Platform.OS === 'android' ? 'Downloads' : 'Documents'} folder
-                </Text>
-              </View>
-              <Icon name="chevron-right" size={20} color={COLORS.textMuted} />
-            </TouchableOpacity>
-            
-            {/* Cancel Button */}
-            <TouchableOpacity 
-              style={styles.downloadCancelButton}
-              onPress={() => setIsDownloadOptionsOpen(false)}
-            >
-              <Text style={styles.downloadCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Queue Modal */}
-      <Modal
-        visible={isQueueOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsQueueOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity 
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setIsQueueOpen(false)}
-          />
-          <View style={styles.queuePanel}>
-            {/* Queue Header */}
-            <View style={styles.queueHeader}>
-              <View style={styles.queueTitleContainer}>
-                <Icon name="list" size={20} color={COLORS.textPrimary} />
-                <Text style={styles.queueTitle}>
-                  {isShuffle ? 'Next Songs (Shuffled)' : 'Next Songs'}
-                </Text>
-              </View>
-              <TouchableOpacity 
-                style={styles.queueCloseButton}
-                onPress={() => setIsQueueOpen(false)}
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={handleDownload}
+                disabled={isDownloading}
               >
-                <Text style={styles.queueCloseText}>Close</Text>
-                <Icon name="chevron-down" size={16} color={COLORS.textMuted} />
+                <Icon
+                  name={currentSong && isDownloaded(currentSong._id) ? "check-circle" : "download"}
+                  size={20}
+                  color={currentSong && isDownloaded(currentSong._id) ? themeColors.primary : COLORS.textPrimary}
+                />
+                <Text style={[
+                  styles.menuItemText,
+                  currentSong && isDownloaded(currentSong._id) && { color: themeColors.primary }
+                ]}>
+                  {isDownloading
+                    ? `Downloading... ${downloadProgress[currentSong?._id || '']?.progress || 0}%`
+                    : currentSong && isDownloaded(currentSong._id)
+                      ? 'Downloaded'
+                      : 'Download'}
+                </Text>
               </TouchableOpacity>
             </View>
-
-            {/* Queue List */}
-            {upcomingQueue.length > 0 ? (
-              <FlatList
-                data={upcomingQueue}
-                renderItem={renderQueueItem}
-                keyExtractor={(item) => item._id}
-                style={styles.queueList}
-                contentContainerStyle={styles.queueListContent}
-                showsVerticalScrollIndicator={false}
-              />
-            ) : (
-              <View style={styles.emptyQueue}>
-                <Icon name="music" size={40} color={COLORS.textMuted} />
-                <Text style={styles.emptyQueueText}>Queue is empty</Text>
-                <Text style={styles.emptyQueueSubtext}>
-                  {queue.length === 0 
-                    ? 'Play a song to start the queue'
-                    : isShuffle && !isLooping 
-                      ? 'Enable loop to continue playing' 
-                      : 'No more songs to play'}
-                </Text>
-              </View>
-            )}
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* Custom Dialog */}
-      <CustomDialog
-        visible={dialogState.visible}
-        title={dialogState.title}
-        message={dialogState.message}
-        type={dialogState.type}
-        buttons={dialogState.buttons}
-        onClose={hideDialog}
-      />
+        {/* Download Options Modal */}
+        <Modal
+          visible={isDownloadOptionsOpen}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setIsDownloadOptionsOpen(false)}
+        >
+          <View style={styles.downloadOptionsOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setIsDownloadOptionsOpen(false)}
+            />
+            <View style={styles.downloadOptionsPanel}>
+              <Text style={styles.downloadOptionsTitle}>Download Options</Text>
+              <Text style={styles.downloadOptionsSubtitle}>
+                Choose how you want to save "{currentSong?.title}"
+              </Text>
+
+              {/* Offline Viewing Option */}
+              <TouchableOpacity
+                style={styles.downloadOption}
+                onPress={handleOfflineDownload}
+              >
+                <View style={[styles.downloadOptionIcon, { backgroundColor: themeColors.primaryMuted }]}>
+                  <Icon name="smartphone" size={24} color={themeColors.primary} />
+                </View>
+                <View style={styles.downloadOptionInfo}>
+                  <Text style={styles.downloadOptionTitle}>Offline Viewing</Text>
+                  <Text style={styles.downloadOptionDesc}>
+                    Save for offline playback within the app
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+
+              {/* Download to Device Option */}
+              <TouchableOpacity
+                style={styles.downloadOption}
+                onPress={handleDeviceDownload}
+              >
+                <View style={[styles.downloadOptionIcon, { backgroundColor: 'rgba(59, 130, 246, 0.2)' }]}>
+                  <Icon name="download" size={24} color="#3b82f6" />
+                </View>
+                <View style={styles.downloadOptionInfo}>
+                  <Text style={styles.downloadOptionTitle}>Save to Device</Text>
+                  <Text style={styles.downloadOptionDesc}>
+                    Download to your {Platform.OS === 'android' ? 'Downloads' : 'Documents'} folder
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+
+              {/* Cancel Button */}
+              <TouchableOpacity
+                style={styles.downloadCancelButton}
+                onPress={() => setIsDownloadOptionsOpen(false)}
+              >
+                <Text style={styles.downloadCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Queue Modal */}
+        <Modal
+          visible={isQueueOpen}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setIsQueueOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={styles.modalBackdrop}
+              activeOpacity={1}
+              onPress={() => setIsQueueOpen(false)}
+            />
+            <View style={styles.queuePanel}>
+              {/* Queue Header */}
+              <View style={styles.queueHeader}>
+                <View style={styles.queueTitleContainer}>
+                  <Icon name="list" size={20} color={COLORS.textPrimary} />
+                  <Text style={styles.queueTitle}>
+                    {isShuffle ? 'Next Songs (Shuffled)' : 'Next Songs'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.queueCloseButton}
+                  onPress={() => setIsQueueOpen(false)}
+
+                >
+                  <Text style={styles.queueCloseText}>Close</Text>
+                  <Icon name="chevron-down" size={16} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Queue List */}
+              {upcomingQueue.length > 0 ? (
+                <FlatList
+                  data={upcomingQueue}
+                  renderItem={renderQueueItem}
+                  keyExtractor={(item) => item._id}
+                  style={styles.queueList}
+                  contentContainerStyle={styles.queueListContent}
+                  showsVerticalScrollIndicator={false}
+                />
+              ) : (
+                <View style={styles.emptyQueue}>
+                  <Icon name="music" size={40} color={COLORS.textMuted} />
+                  <Text style={styles.emptyQueueText}>Queue is empty</Text>
+                  <Text style={styles.emptyQueueSubtext}>
+                    {queue.length === 0
+                      ? 'Play a song to start the queue'
+                      : isShuffle && !isLooping
+                        ? 'Enable loop to continue playing'
+                        : 'No more songs to play'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Share Users Modal */}
+        <Modal
+          visible={isShareUsersOpen}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setIsShareUsersOpen(false)}
+        >
+          <View style={styles.shareModalOverlay}>
+            <TouchableOpacity
+              style={styles.modalBackdrop}
+              activeOpacity={1}
+              onPress={() => setIsShareUsersOpen(false)}
+            />
+            <View style={styles.sharePanel}>
+              {/* Header */}
+              <View style={styles.sharePanelHeader}>
+                <Text style={styles.sharePanelTitle}>Share Song</Text>
+                <TouchableOpacity onPress={() => setIsShareUsersOpen(false)}>
+                  <Icon name="x" size={24} color={COLORS.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Song Preview */}
+              {currentSong && (
+                <View style={styles.shareSongPreview}>
+                  <Image
+                    source={{ uri: getFullImageUrl(currentSong.imageUrl) }}
+                    style={styles.shareSongImage}
+                  />
+                  <View style={styles.shareSongInfo}>
+                    <Text style={styles.shareSongTitle} numberOfLines={1}>{currentSong.title}</Text>
+                    <Text style={styles.shareSongArtist} numberOfLines={1}>{currentSong.artist}</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* External Share Option */}
+              <TouchableOpacity
+                style={styles.externalShareButton}
+                onPress={handleExternalShare}
+              >
+                <Icon name="share-2" size={20} color={themeColors.primary} />
+                <Text style={[styles.externalShareText, { color: themeColors.primary }]}>
+                  Share via other apps
+                </Text>
+                <Icon name="chevron-right" size={18} color={themeColors.primary} />
+              </TouchableOpacity>
+
+              <View style={styles.shareDivider}>
+                <View style={styles.shareDividerLine} />
+                <Text style={styles.shareDividerText}>or send to a friend</Text>
+                <View style={styles.shareDividerLine} />
+              </View>
+
+              {/* Users List */}
+              {isLoadingUsers ? (
+                <View style={styles.shareLoadingContainer}>
+                  <ActivityIndicator size="large" color={themeColors.primary} />
+                  <Text style={styles.shareLoadingText}>Loading users...</Text>
+                </View>
+              ) : shareUsers.length === 0 ? (
+                <View style={styles.shareEmptyContainer}>
+                  <Icon name="users" size={40} color={COLORS.textMuted} />
+                  <Text style={styles.shareEmptyText}>No users available</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={shareUsers}
+                  keyExtractor={(item) => item._id}
+                  style={styles.shareUsersList}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.shareUserItem}
+                      onPress={() => handleSendToUser(item)}
+                      disabled={isSending === item._id}
+                    >
+                      <View style={styles.shareUserAvatar}>
+                        {item.image ? (
+                          <Image source={{ uri: item.image }} style={styles.shareUserAvatarImage} />
+                        ) : (
+                          <View style={[styles.shareUserAvatarPlaceholder, { backgroundColor: themeColors.primary + '30' }]}>
+                            <Text style={[styles.shareUserAvatarText, { color: themeColors.primary }]}>
+                              {item.name?.charAt(0)?.toUpperCase() || '?'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.shareUserInfo}>
+                        <Text style={styles.shareUserName}>{item.name}</Text>
+                        {item.email && (
+                          <Text style={styles.shareUserEmail} numberOfLines={1}>{item.email}</Text>
+                        )}
+                      </View>
+                      {isSending === item._id ? (
+                        <ActivityIndicator size="small" color={themeColors.primary} />
+                      ) : (
+                        <View style={[styles.shareSendButton, { backgroundColor: themeColors.primary }]}>
+                          <Icon name="send" size={16} color="#fff" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Custom Dialog */}
+        <CustomDialog
+          visible={dialogState.visible}
+          title={dialogState.title}
+          message={dialogState.message}
+          type={dialogState.type}
+          buttons={dialogState.buttons}
+          onClose={hideDialog}
+        />
       </SafeAreaView>
     </View>
   );
@@ -1008,6 +1239,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
+    // backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   queuePanel: {
     backgroundColor: 'rgba(24, 24, 27, 0.98)',
@@ -1183,6 +1415,195 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     color: COLORS.textMuted,
     fontWeight: '500',
+  },
+  // Share Users Modal styles
+  shareModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  sharePanel: {
+    backgroundColor: COLORS.zinc900,
+    borderTopLeftRadius: BORDER_RADIUS.xxl,
+    borderTopRightRadius: BORDER_RADIUS.xxl,
+    maxHeight: '80%',
+    paddingBottom: SPACING.xxl,
+  },
+  sharePanelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  sharePanelTitle: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  shareSongPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.lg,
+    backgroundColor: COLORS.backgroundCard,
+    marginHorizontal: SPACING.lg,
+    marginVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  shareSongImage: {
+    width: 50,
+    height: 50,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  shareSongInfo: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  shareSongTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  shareSongArtist: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  externalShareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    marginHorizontal: SPACING.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: BORDER_RADIUS.lg,
+    gap: SPACING.sm,
+  },
+  externalShareText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
+    flex: 1,
+  },
+  shareDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    marginVertical: SPACING.lg,
+  },
+  shareDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  shareDividerText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginHorizontal: SPACING.md,
+  },
+  shareLoadingContainer: {
+    padding: SPACING.xxl,
+    alignItems: 'center',
+  },
+  shareLoadingText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textMuted,
+    marginTop: SPACING.md,
+  },
+  shareEmptyContainer: {
+    padding: SPACING.xxl,
+    alignItems: 'center',
+  },
+  shareEmptyText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textMuted,
+    marginTop: SPACING.md,
+  },
+  shareUsersList: {
+    maxHeight: 300,
+    paddingHorizontal: SPACING.lg,
+  },
+  shareUserItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  shareUserAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  shareUserAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  shareUserAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareUserAvatarText: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '600',
+  },
+  shareUserInfo: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  shareUserName: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  shareUserEmail: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  shareSendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  queueItemWrapper: {
+    position: 'relative',
+  },
+  queueItemMenuButton: {
+    padding: SPACING.xs,
+    marginLeft: SPACING.sm,
+  },
+  queueItemMenu: {
+    backgroundColor: COLORS.zinc900,
+    borderWidth: 1,
+    zIndex: 1000,
+    borderColor: COLORS.zinc800,
+    borderRadius: BORDER_RADIUS.md,
+    marginHorizontal: SPACING.md,
+    // marginTop: -SPACING.xs,
+    // marginBottom: SPACING.sm,
+    overflow: 'hidden',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  queueItemMenuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    gap: SPACING.md,
+  },
+  queueItemMenuText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.textPrimary,
   },
 });
 
