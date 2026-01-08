@@ -17,6 +17,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useOfflineMusicStore, formatFileSize, LocalSong } from '../store/useOfflineMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+import { getFullImageUrl } from '../config';
 
 type TabType = 'downloaded' | 'device';
 
@@ -39,13 +40,13 @@ const SongItem = ({
   isPlaying: boolean;
 }) => {
   const showPause = isCurrentSong && isPlaying;
-  
+
   return (
     <TouchableOpacity style={styles.songItem} onPress={onPlay} activeOpacity={0.7}>
       {/* Album Art */}
       <View style={styles.albumArt}>
         {song.imageUrl ? (
-          <Image source={{ uri: song.imageUrl }} style={styles.albumImage} />
+          <Image source={{ uri: getFullImageUrl(song.imageUrl) }} style={styles.albumImage} />
         ) : (
           <View style={[styles.albumPlaceholder, { backgroundColor: themeColor + '30' }]}>
             <Icon name="music" size={24} color={themeColor} />
@@ -138,21 +139,21 @@ export const OfflineMusicScreen = () => {
 
     // Get all songs from the current tab for the queue
     const currentSongs = activeTab === 'downloaded' ? downloadedSongs : deviceSongs;
-    
+
     // Prepare all songs with proper file:// URLs
     const queueSongs = currentSongs.map(s => ({
       ...s,
       audioUrl: s.localPath.startsWith('file://') ? s.localPath : `file://${s.localPath}`,
     }));
-    
+
     // Find the index of the song to play
     const songIndex = queueSongs.findIndex(s => s._id === song._id);
-    
+
     if (songIndex === -1) {
       console.error('Song not found in list:', song.title);
       return;
     }
-    
+
     playAlbum(queueSongs as any, songIndex);
   };
 
@@ -168,7 +169,7 @@ export const OfflineMusicScreen = () => {
 
   const handleClearAll = () => {
     if (downloadedSongs.length === 0) return;
-    
+
     showConfirm(
       'Clear All Downloads',
       `This will delete all ${downloadedSongs.length} downloaded songs. Are you sure?`,

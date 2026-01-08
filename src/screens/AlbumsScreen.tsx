@@ -66,9 +66,28 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
   const { fetchAlbumById, currentAlbum, isLoading } = useMusicStore();
   const { colors: themeColors } = useThemeStore();
 
+  const SONGS_PER_PAGE = 14;
+
   useEffect(() => {
-    fetchAlbumById(album._id);
+    fetchAlbumById(album._id, 1, SONGS_PER_PAGE);
   }, [album._id]);
+
+  const { isLoadingMoreAlbumSongs, hasMoreAlbumSongs, currentAlbumPage } = useMusicStore();
+
+  const handleLoadMore = () => {
+    if (hasMoreAlbumSongs && !isLoading && !isLoadingMoreAlbumSongs) {
+      fetchAlbumById(album._id, currentAlbumPage + 1, SONGS_PER_PAGE);
+    }
+  };
+
+  const renderFooter = () => {
+    if (!isLoadingMoreAlbumSongs) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={themeColors.primary} />
+      </View>
+    );
+  };
 
   const displayAlbum = currentAlbum || album;
 
@@ -102,114 +121,119 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
     );
   }
 
-  return (
-    <View style={styles.detailContainer}>
-      <ScrollView
-        style={styles.detailScroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Background Gradient */}
-        <LinearGradient
-          colors={[`${themeColors.primary}CC`, 'rgba(24, 24, 27, 0.8)', COLORS.background]}
-          style={styles.detailGradient}
+  const renderHeader = () => (
+    <View style={styles.detailContent}>
+      {/* Album Header */}
+      <View style={styles.detailHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Icon name="chevron-left" size={24} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Album Info */}
+      <View style={styles.albumInfoSection}>
+        <Image
+          source={{ uri: getFullImageUrl(displayAlbum?.imageUrl || '') }}
+          style={styles.detailAlbumImage}
         />
+        <Text style={styles.detailAlbumTitle}>{displayAlbum?.title}</Text>
+        <Text style={styles.detailAlbumArtist}>
+          {displayAlbum?.artist} • {displayAlbum?.totalSongs || displayAlbum?.songs?.length || 0} songs • {displayAlbum?.releaseYear}
+        </Text>
+      </View>
 
-        {/* Content */}
-        <View style={styles.detailContent}>
-          {/* Album Header */}
-          <View style={styles.detailHeader}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backIcon}>Back</Text>
-            </TouchableOpacity>
-          </View>
+      {/* Play Button */}
+      <View style={styles.playButtonContainer}>
+        <TouchableOpacity
+          style={[styles.mainPlayButton, { backgroundColor: themeColors.primary }]}
+          onPress={handlePlayAlbum}
+          activeOpacity={0.8}
+        >
+          <Icon
+            name={isCurrentAlbumPlaying ? 'pause' : 'play'}
+            size={28}
+            color={COLORS.background}
+            style={!isCurrentAlbumPlaying && { marginLeft: 3 }}
+          />
+        </TouchableOpacity>
+      </View>
 
-          {/* Album Info */}
-          <View style={styles.albumInfoSection}>
-            <Image
-              source={{ uri: getFullImageUrl(displayAlbum?.imageUrl || '') }}
-              style={styles.detailAlbumImage}
-            />
-            <Text style={styles.detailAlbumTitle}>{displayAlbum?.title}</Text>
-            <Text style={styles.detailAlbumArtist}>
-              {displayAlbum?.artist} • {displayAlbum?.songs?.length || 0} songs • {displayAlbum?.releaseYear}
-            </Text>
-          </View>
+      {/* Table Header */}
+      <View style={styles.songsHeader}>
+        <Text style={styles.headerNumber}>#</Text>
+        <Text style={styles.songsHeaderTitle}>Title</Text>
+        <Text style={styles.songsHeaderDuration}>⏱</Text>
+      </View>
+    </View>
+  );
 
-          {/* Play Button */}
-          <View style={styles.playButtonContainer}>
-            <TouchableOpacity
-              style={[styles.mainPlayButton, { backgroundColor: themeColors.primary }]}
-              onPress={handlePlayAlbum}
-              activeOpacity={0.8}
+  const renderSongItem = ({ item: song, index }: { item: Song; index: number }) => {
+    const isCurrentSong = currentSong?._id === song._id;
+
+    return (
+      <TouchableOpacity
+        style={styles.songRow}
+        onPress={() => handlePlaySong(index)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.songNumber}>
+          {isCurrentSong && isPlaying ? (
+            <Text style={[styles.playingNote, { color: themeColors.primary }]}>♫</Text>
+          ) : (
+            <Text style={styles.songNumberText}>{index + 1}</Text>
+          )}
+        </View>
+        <View style={styles.songInfo}>
+          <Image
+            source={{ uri: getFullImageUrl(song.imageUrl) }}
+            style={styles.songImage}
+          />
+          <View style={styles.songTextContainer}>
+            <Text
+              style={[styles.songTitle, isCurrentSong && { color: themeColors.primary }]}
+              numberOfLines={1}
             >
-              <Icon
-                name={isCurrentAlbumPlaying ? 'pause' : 'play'}
-                size={28}
-                color={COLORS.background}
-                style={!isCurrentAlbumPlaying && { marginLeft: 3 }}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Songs List */}
-          <View style={styles.songsContainer}>
-            {/* Table Header */}
-            <View style={styles.songsHeader}>
-              <Text style={styles.headerNumber}>#</Text>
-              <Text style={styles.songsHeaderTitle}>Title</Text>
-              <Text style={styles.songsHeaderDuration}>⏱</Text>
-            </View>
-
-            {/* Songs */}
-            {displayAlbum?.songs?.map((song, index) => {
-              const isCurrentSong = currentSong?._id === song._id;
-
-              return (
-                <TouchableOpacity
-                  key={`${song._id}-${index}`}
-                  style={styles.songRow}
-                  onPress={() => handlePlaySong(index)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.songNumber}>
-                    {isCurrentSong && isPlaying ? (
-                      <Text style={[styles.playingNote, { color: themeColors.primary }]}>♫</Text>
-                    ) : (
-                      <Text style={styles.songNumberText}>{index + 1}</Text>
-                    )}
-                  </View>
-                  <View style={styles.songInfo}>
-                    <Image
-                      source={{ uri: getFullImageUrl(song.imageUrl) }}
-                      style={styles.songImage}
-                    />
-                    <View style={styles.songTextContainer}>
-                      <Text
-                        style={[styles.songTitle, isCurrentSong && { color: themeColors.primary }]}
-                        numberOfLines={1}
-                      >
-                        {song.title}
-                      </Text>
-                      <Text style={styles.songArtist} numberOfLines={1}>
-                        {song.artist}
-                      </Text>
-                      {song.isLiked && (
-                        <View style={styles.likedIndicator}>
-                          <Text style={styles.likedIcon}>❤️</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                  <Text style={styles.songDuration}>{formatDuration(song.duration)}</Text>
-                </TouchableOpacity>
-              );
-            })}
+              {song.title}
+            </Text>
+            <Text style={styles.songArtist} numberOfLines={1}>
+              {song.artist}
+            </Text>
+            {song.isLiked && (
+              <View style={styles.likedIndicator}>
+                <Text style={styles.likedIcon}>❤️</Text>
+              </View>
+            )}
           </View>
         </View>
+        <Text style={styles.songDuration}>{formatDuration(song.duration)}</Text>
+      </TouchableOpacity>
+    );
+  };
 
-        {/* Bottom spacing */}
-        <View style={{ height: DIMS.playbackHeight + SPACING.xxl }} />
-      </ScrollView>
+  return (
+    <View style={styles.detailContainer}>
+      {/* Background Gradient */}
+      <LinearGradient
+        colors={[`${themeColors.primary}CC`, 'rgba(0, 0, 0, 0.8)', COLORS.background]}
+        style={styles.detailGradient}
+      />
+
+      <FlatList
+        style={styles.detailScroll}
+        data={displayAlbum?.songs || []}
+        renderItem={renderSongItem}
+        keyExtractor={(item, index) => `${item._id}-${index}`}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={() => (
+          <>
+            {renderFooter()}
+            <View style={{ height: DIMS.playbackHeight + SPACING.xxl }} />
+          </>
+        )}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 };
@@ -394,7 +418,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 400,
+    height: 150,
   },
   detailContent: {
     position: 'relative',
@@ -564,5 +588,10 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     color: COLORS.textMuted,
     marginLeft: SPACING.md,
+  },
+  footerLoader: {
+    paddingVertical: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

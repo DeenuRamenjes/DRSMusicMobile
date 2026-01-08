@@ -10,6 +10,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { Song } from '../types';
+import { getFullImageUrl } from '../config';
 
 interface SongCardProps {
   song: Song;
@@ -18,14 +19,14 @@ interface SongCardProps {
   size?: 'small' | 'medium' | 'large';
 }
 
-export const SongCard: React.FC<SongCardProps> = ({ 
-  song, 
-  onPress, 
+export const SongCard: React.FC<SongCardProps> = ({
+  song,
+  onPress,
   isPlaying = false,
-  size = 'medium' 
+  size = 'medium'
 }) => {
   const { colors: themeColors } = useThemeStore();
-  
+
   const dimensions = {
     small: 100,
     medium: 140,
@@ -35,17 +36,17 @@ export const SongCard: React.FC<SongCardProps> = ({
   const cardSize = dimensions[size];
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[styles.container, { width: cardSize }]}
       onPress={onPress}
       activeOpacity={0.8}
     >
       <View style={[styles.imageContainer, { width: cardSize, height: cardSize }]}>
-        <Image 
-          source={{ uri: song.imageUrl }} 
+        <Image
+          source={{ uri: getFullImageUrl(song.imageUrl) }}
           style={[styles.image, { width: cardSize, height: cardSize }]}
         />
-        
+
         {/* Play overlay */}
         <View style={[styles.playOverlay, isPlaying && styles.playOverlayActive]}>
           {isPlaying ? (
@@ -59,7 +60,7 @@ export const SongCard: React.FC<SongCardProps> = ({
           )}
         </View>
       </View>
-      
+
       <Text style={styles.title} numberOfLines={1}>{song.title}</Text>
       <Text style={styles.artist} numberOfLines={1}>{song.artist}</Text>
     </TouchableOpacity>

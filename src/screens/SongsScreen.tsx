@@ -32,17 +32,19 @@ const formatDuration = (seconds: number) => {
 
 export const SongsScreen = () => {
   const navigation = useNavigation();
-  const { songs, isLoading, fetchSongs } = useMusicStore();
+  const { songs, isLoading, isFetchingMore, hasMore, currentPage, fetchSongs } = useMusicStore();
   const { currentSong, isPlaying, playSong, pauseSong, setQueue } = usePlayerStore();
   const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
   const { colors: themeColors, dimensions: themeDimensions, spacing: themeSpacing, fontSizes: themeFontSizes, compactMode } = useThemeStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filteredSongs, setFilteredSongs] = useState<Song[]>([]);
 
+  const SONGS_PER_PAGE = 14;
+
   useEffect(() => {
     // Skip fetching if in offline mode
     if (!isOfflineMode) {
-      fetchSongs();
+      fetchSongs(1, SONGS_PER_PAGE);
     }
   }, [isOfflineMode]);
 
@@ -56,6 +58,21 @@ export const SongsScreen = () => {
       setFilteredSongs(songs);
     }
   }, [songs, isOfflineMode, downloadedSongs]);
+
+  const handleLoadMore = () => {
+    if (!isOfflineMode && hasMore && !isLoading && !isFetchingMore) {
+      fetchSongs(currentPage + 1, SONGS_PER_PAGE);
+    }
+  };
+
+  const renderFooter = () => {
+    if (!isFetchingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={themeColors.primary} />
+      </View>
+    );
+  };
 
   const handlePlayPause = (song: Song) => {
     if (currentSong?._id === song._id) {
@@ -245,6 +262,9 @@ export const SongsScreen = () => {
           numColumns={2}
           contentContainerStyle={styles.gridContainer}
           columnWrapperStyle={styles.gridRow}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={renderFooter}
           showsVerticalScrollIndicator={false}
         />
       ) : (
@@ -262,6 +282,9 @@ export const SongsScreen = () => {
             renderItem={renderListItem}
             keyExtractor={(item) => item._id}
             contentContainerStyle={styles.listContent}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={renderFooter}
             showsVerticalScrollIndicator={false}
           />
         </View>
@@ -542,5 +565,10 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: FONT_SIZES.md,
     color: COLORS.textMuted,
+  },
+  footerLoader: {
+    paddingVertical: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

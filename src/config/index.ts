@@ -10,7 +10,7 @@ import { create } from 'zustand';
 export const USE_DEPLOYMENT = true;
 
 // Local Development Configuration
-const LOCAL_IP = '192.168.1.35';
+const LOCAL_IP = '192.168.0.7';
 const LOCAL_PORT = 5000;
 const LOCAL_SERVER_URL = `http://${LOCAL_IP}:${LOCAL_PORT}`;
 
@@ -227,14 +227,15 @@ export const getSocketUrl = (): string => {
 
 // Helper function to get full image URL
 export const getFullImageUrl = (imageUrl?: string | null): string => {
-    if (!imageUrl) return '';
+    const placeholder = 'https://via.placeholder.com/300?text=No+Image';
+    if (!imageUrl || imageUrl.trim() === '') return placeholder;
     if (imageUrl.startsWith('http')) return imageUrl;
     return `${getBackendUrl()}${imageUrl}`;
 };
 
 // Helper function to get full audio URL
 export const getFullAudioUrl = (audioUrl?: string | null): string => {
-    if (!audioUrl) return '';
+    if (!audioUrl || audioUrl.trim() === '') return '';
 
     // Already a complete URL (http, https, or file)
     if (audioUrl.startsWith('http://') || audioUrl.startsWith('https://') || audioUrl.startsWith('file://')) {

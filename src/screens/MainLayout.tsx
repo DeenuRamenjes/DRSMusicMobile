@@ -61,7 +61,7 @@ const LeftSidebar = ({
   const { unreadCounts } = useFriendsStore();
   const { user } = useAuthStore();
   const { colors: themeColors } = useThemeStore();
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Calculate total unread messages
   const totalUnread = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
@@ -125,7 +125,7 @@ const LeftSidebar = ({
           <Text style={styles.sidebarUserName} numberOfLines={1}>{user?.name || 'Guest'}</Text>
           <Text style={styles.sidebarUserEmail} numberOfLines={1}>{user?.emailAddress || ''}</Text>
         </View>
-          {/* <View style={styles.sidebarCloseRow}>
+        {/* <View style={styles.sidebarCloseRow}>
               <TouchableOpacity
                 onPress={() => setIsSidebarOpen(false)}
                 style={styles.sidebarCloseButton}
@@ -445,20 +445,22 @@ export const MainLayout = () => {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             {/* Menu Button with unread badge */}
-            <TouchableOpacity
-              onPress={() => setIsSidebarOpen(true)}
-              style={styles.menuButton}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.menuIcon}>☰</Text>
-              {totalUnread > 0 && (
-                <View style={styles.headerUnreadBadge}>
-                  <Text style={styles.unreadBadgeText}>
-                    {totalUnread > 99 ? '99+' : totalUnread}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            {!isOfflineMode && (
+              <TouchableOpacity
+                onPress={() => setIsSidebarOpen(true)}
+                style={styles.menuButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.menuIcon}>☰</Text>
+                {totalUnread > 0 && (
+                  <View style={styles.headerUnreadBadge}>
+                    <Text style={styles.unreadBadgeText}>
+                      {totalUnread > 99 ? '99+' : totalUnread}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Logo */}

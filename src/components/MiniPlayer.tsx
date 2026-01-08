@@ -11,13 +11,14 @@ import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { RootStackParamList } from '../types';
+import { getFullImageUrl } from '../config';
 
 export const MiniPlayer = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const { 
-    currentSong, 
-    isPlaying, 
-    togglePlayPause, 
+  const {
+    currentSong,
+    isPlaying,
+    togglePlayPause,
     playNext,
     currentTime,
     duration,
@@ -28,7 +29,7 @@ export const MiniPlayer = () => {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.container}
       activeOpacity={0.95}
     >
@@ -40,8 +41,8 @@ export const MiniPlayer = () => {
       <View style={styles.content}>
         {/* Song info */}
         <View style={styles.songInfo}>
-          <Image 
-            source={{ uri: currentSong.imageUrl }} 
+          <Image
+            source={{ uri: getFullImageUrl(currentSong.imageUrl) }}
             style={styles.albumArt}
           />
           <View style={styles.textContainer}>
@@ -52,18 +53,18 @@ export const MiniPlayer = () => {
 
         {/* Controls */}
         <View style={styles.controls}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.controlButton}
             onPress={togglePlayPause}
           >
-            <Icon 
-              name={isPlaying ? 'pause' : 'play'} 
-              size={24} 
+            <Icon
+              name={isPlaying ? 'pause' : 'play'}
+              size={24}
               color={COLORS.textPrimary}
               style={!isPlaying && { marginLeft: 2 }}
             />
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.controlButton}
             onPress={playNext}
           >

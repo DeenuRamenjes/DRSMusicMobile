@@ -151,7 +151,7 @@ export const ProfileScreen = () => {
             <View style={styles.avatarRing}>
               {user.imageUrl ? (
                 <Image
-                  source={{ uri: user.imageUrl }}
+                  source={{ uri: getFullImageUrl(user.imageUrl) }}
                   style={styles.avatar}
                 />
               ) : (

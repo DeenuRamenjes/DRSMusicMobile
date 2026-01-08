@@ -66,12 +66,18 @@ interface MusicState {
 
     // Loading states
     isLoading: boolean;
+    isFetchingMore: boolean;
+    hasMore: boolean;
+    currentPage: number;
+    isLoadingMoreAlbumSongs: boolean;
+    hasMoreAlbumSongs: boolean;
+    currentAlbumPage: number;
     error: string | null;
     likedSongsLoading: boolean;
     likedSongsInitialized: boolean;
 
     // Song Actions
-    fetchSongs: () => Promise<void>;
+    fetchSongs: (page?: number, limit?: number) => Promise<void>;
     fetchFeaturedSongs: () => Promise<void>;
     fetchMadeForYouSongs: () => Promise<void>;
     fetchTrendingSongs: () => Promise<void>;
@@ -82,7 +88,7 @@ interface MusicState {
 
     // Album Actions
     fetchAlbums: () => Promise<void>;
-    fetchAlbumById: (id: string) => Promise<Album | null>;
+    fetchAlbumById: (id: string, page?: number, limit?: number) => Promise<Album | null>;
     deleteAlbum: (id: string) => Promise<void>;
     updateAlbum: (id: string, formData: FormData) => Promise<void>;
     assignSongsToAlbum: (albumId: string, songIds: string[]) => Promise<void>;
@@ -121,23 +127,59 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         uniqueArtists: 0,
     },
     isLoading: false,
+    isFetchingMore: false,
+    hasMore: true,
+    currentPage: 1,
+    isLoadingMoreAlbumSongs: false,
+    hasMoreAlbumSongs: true,
+    currentAlbumPage: 1,
     error: null,
     likedSongsLoading: false,
     likedSongsInitialized: false,
 
     // Fetch all songs - GET /api/songs
-    fetchSongs: async () => {
-        set({ isLoading: true, error: null });
+    fetchSongs: async (page?: number, limit?: number) => {
+        const isInitial = !page || page === 1;
+
+        if (isInitial) {
+            set({ isLoading: true, error: null, currentPage: 1, hasMore: true });
+        } else {
+            set({ isFetchingMore: true });
+        }
+
         try {
-            const { data } = await axiosInstance.get<Song[]>('/songs');
+            const url = page && limit ? `/songs?page=${page}&limit=${limit}` : '/songs';
+            const { data } = await axiosInstance.get<any>(url);
+
+            let songsData: Song[];
+            let hasMore = false;
+            let total = 0;
+
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                songsData = data.songs;
+                hasMore = data.hasMore;
+                total = data.total;
+            } else {
+                songsData = data;
+            }
+
             const likedSet = new Set(get().likedSongs.map((song) => song._id));
-            const normalized = withNormalizedAlbums(data);
-            set({ songs: applyLikesToSongs(normalized, likedSet), isLoading: false });
+            const normalized = withNormalizedAlbums(songsData);
+            const processedSongs = applyLikesToSongs(normalized, likedSet);
+
+            set((state) => ({
+                songs: isInitial ? processedSongs : [...state.songs, ...processedSongs],
+                isLoading: false,
+                isFetchingMore: false,
+                hasMore: hasMore,
+                currentPage: page || 1
+            }));
         } catch (error: any) {
             console.error('Error fetching songs:', error);
             set({
                 error: error.response?.data?.message || 'Failed to fetch songs',
-                isLoading: false
+                isLoading: false,
+                isFetchingMore: false
             });
         }
     },
@@ -296,18 +338,58 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     },
 
     // Fetch album by ID - GET /api/album/:id
-    fetchAlbumById: async (id: string) => {
-        set({ isLoading: true });
+    fetchAlbumById: async (id: string, page?: number, limit?: number) => {
+        const isInitial = !page || page === 1;
+
+        if (isInitial) {
+            set({ isLoading: true, currentAlbum: null, currentAlbumPage: 1, hasMoreAlbumSongs: true });
+        } else {
+            set({ isLoadingMoreAlbumSongs: true });
+        }
+
         try {
-            const { data } = await axiosInstance.get<Album>(`/album/${id}`);
+            const url = page && limit ? `/album/${id}?page=${page}&limit=${limit}` : `/album/${id}`;
+            const { data } = await axiosInstance.get<any>(url);
+
             const likedSet = new Set(get().likedSongs.map((song) => song._id));
-            const albumWithLikes = { ...data, songs: applyLikesToSongs(data.songs, likedSet) };
-            set({ currentAlbum: albumWithLikes, isLoading: false });
-            return albumWithLikes;
+
+            let albumData: Album;
+            let hasMore = false;
+            let currentPage = 1;
+
+            if (data.totalSongs !== undefined) {
+                // Paginated response
+                albumData = {
+                    ...data,
+                    songs: applyLikesToSongs(data.songs, likedSet)
+                };
+                hasMore = data.hasMoreSongs;
+                currentPage = data.currentSongPage;
+            } else {
+                // Legacy non-paginated response
+                albumData = { ...data, songs: applyLikesToSongs(data.songs, likedSet) };
+                hasMore = false;
+            }
+
+            set((state) => ({
+                currentAlbum: isInitial
+                    ? albumData
+                    : {
+                        ...albumData,
+                        songs: [...(state.currentAlbum?.songs || []), ...albumData.songs]
+                    },
+                isLoading: false,
+                isLoadingMoreAlbumSongs: false,
+                hasMoreAlbumSongs: hasMore,
+                currentAlbumPage: currentPage
+            }));
+
+            return albumData;
         } catch (error: any) {
             console.error('Error fetching album:', error);
             set({
                 isLoading: false,
+                isLoadingMoreAlbumSongs: false,
                 error: error.response?.data?.message || 'Failed to fetch album'
             });
             return null;

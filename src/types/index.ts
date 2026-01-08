@@ -45,6 +45,9 @@ export interface Album {
     imageUrl: string;
     songs: Song[];
     releaseYear: number;
+    totalSongs?: number;
+    hasMoreSongs?: boolean;
+    currentSongPage?: number;
     createdAt?: string;
     updatedAt?: string;
 }

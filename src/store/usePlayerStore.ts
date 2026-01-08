@@ -497,28 +497,67 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     removeFromQueue: (songId: string) => {
-        const { queue } = get();
-        set({ queue: queue.filter(s => s._id !== songId) });
+        const { queue, isShuffle, shuffleQueue, currentSong } = get();
+        const newQueue = queue.filter(s => s._id !== songId);
+
+        let newIndex = -1;
+        if (currentSong) {
+            newIndex = newQueue.findIndex(s => s._id === currentSong._id);
+        }
+
+        const updates: Partial<PlayerState> = {
+            queue: newQueue,
+            currentIndex: newIndex
+        };
+
+        if (isShuffle) {
+            updates.shuffleQueue = shuffleQueue.filter(s => s._id !== songId);
+        }
+
+        set(updates);
     },
 
     moveToNextInQueue: (songId: string) => {
-        const { queue, currentIndex } = get();
+        const { queue, currentIndex, isShuffle, shuffleQueue, currentSong } = get();
         const songIndex = queue.findIndex(s => s._id === songId);
 
         if (songIndex === -1) return; // Song not in queue
-        if (songIndex === currentIndex + 1) return; // Already next
+        if (songIndex === currentIndex + 1 && !isShuffle) return; // Already next in normal mode
 
         const song = queue[songIndex];
         const newQueue = [...queue];
 
-        // Remove from current position
+        // Remove from current position in regular queue
         newQueue.splice(songIndex, 1);
 
-        // Insert after current song
-        const insertIndex = currentIndex + 1;
+        // Calculate where the current song moved to
+        let newCurrentIndex = currentIndex;
+        if (currentSong) {
+            newCurrentIndex = newQueue.findIndex(s => s._id === currentSong._id);
+        }
+
+        // Insert after current song in regular queue
+        const insertIndex = newCurrentIndex + 1;
         newQueue.splice(insertIndex, 0, song);
 
-        set({ queue: newQueue });
+        // Final check for current song index in case it was the moved song (unlikely but safe)
+        if (currentSong) {
+            newCurrentIndex = newQueue.findIndex(s => s._id === currentSong._id);
+        }
+
+        const updates: Partial<PlayerState> = {
+            queue: newQueue,
+            currentIndex: newCurrentIndex
+        };
+
+        // Handle shuffle queue if active
+        if (isShuffle) {
+            const newShuffleQueue = shuffleQueue.filter(s => s._id !== songId);
+            newShuffleQueue.unshift(song);
+            updates.shuffleQueue = newShuffleQueue;
+        }
+
+        set(updates);
     },
 
     clearQueue: () => {
