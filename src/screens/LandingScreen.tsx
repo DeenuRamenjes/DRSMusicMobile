@@ -280,20 +280,20 @@ export const LandingScreen = () => {
             <Text style={styles.googleText}>Continue with Google</Text>
           </Pressable>
 
-          <Text style={styles.loginText}>or</Text>
+          {/* <Text style={styles.loginText}>or</Text> */}
 
           {/* Email Login Button */}
-          <Pressable
+          {/* <Pressable
             style={({ pressed }) => [styles.emailButton, pressed && styles.emailButtonPressed]}
             onPress={() => setShowEmailLogin(true)}
             disabled={isSigningIn}
           >
             <Text style={styles.emailIcon}>✉️</Text>
             <Text style={styles.emailButtonText}>Sign in with Email</Text>
-          </Pressable>
+          </Pressable> */}
 
           {/* Demo login - only show in local development */}
-          {!USE_DEPLOYMENT && (
+          {/* {!USE_DEPLOYMENT && (
             <Pressable
               style={({ pressed }) => [
                 styles.demoButton,
@@ -312,7 +312,7 @@ export const LandingScreen = () => {
                 </>
               )}
             </Pressable>
-          )}
+          )} */}
 
           <Text style={styles.termsText}>
             By continuing, you agree to our Terms of Service and Privacy Policy
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingVertical: 16,
     borderRadius: 30,
-    marginBottom: 12,
+    marginBottom: 26,
   },
   pressed: {
     backgroundColor: '#E0E0E0',
