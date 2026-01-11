@@ -7,7 +7,7 @@ import { create } from 'zustand';
 
 // Set to TRUE for production (deployed backend servers)
 // Set to FALSE for local development (uses local server directly)
-export const USE_DEPLOYMENT = false;
+export const USE_DEPLOYMENT = true;
 
 // Local Development Configuration
 const LOCAL_IP = '10.45.147.136';

@@ -46,10 +46,16 @@ export const SongsScreen = () => {
   useEffect(() => {
     // Use downloaded songs when offline, otherwise use online songs
     if (isOfflineMode) {
-      setQueue(downloadedSongs as any);
+      // Only set queue if not currently playing something
+      if (!currentSong) {
+        setQueue(downloadedSongs as any);
+      }
       setFilteredSongs(downloadedSongs as any);
     } else if (songs.length > 0) {
-      setQueue(songs);
+      // Only set queue initially (when no song is playing) to avoid resetting during lazy load
+      if (!currentSong) {
+        setQueue(songs);
+      }
       setFilteredSongs(songs);
     }
   }, [songs, isOfflineMode, downloadedSongs]);
