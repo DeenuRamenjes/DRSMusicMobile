@@ -348,7 +348,7 @@ export const MainLayout = () => {
   // This ensures users appear online whenever the app is active
   useEffect(() => {
     if (user && !isOfflineMode) {
-      const userId = user.clerkId || user.id;
+      const userId = user.googleId || user.id;
       if (userId) {
         initSocket(userId);
       }

@@ -20,15 +20,10 @@ import { useThemeStore } from '../store/useThemeStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
 import ProfileHeader from '../components/ProfileHeader';
+import { formatDuration } from '../utils/duration';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
-
-const formatDuration = (seconds: number) => {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-};
 
 export const SongsScreen = () => {
   const navigation = useNavigation();

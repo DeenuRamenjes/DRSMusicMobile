@@ -67,16 +67,16 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
   };
 
   // Filter out current user and sort: online first, then by activity
-  const currentUserId = authUser?.clerkId || authUser?.id;
+  const currentUserId = authUser?.googleId || authUser?.id;
   const sortedUsers = [...users]
-    .filter((u) => u.clerkId !== currentUserId && u._id !== currentUserId)
+    .filter((u) => u.googleId !== currentUserId && u._id !== currentUserId)
     .sort((a, b) => {
-      const aOnline = onlineUsers.has(a.clerkId);
-      const bOnline = onlineUsers.has(b.clerkId);
+      const aOnline = onlineUsers.has(a.googleId);
+      const bOnline = onlineUsers.has(b.googleId);
       if (aOnline !== bOnline) return bOnline ? 1 : -1;
 
-      const aActivity = userActivities.get(a.clerkId) || 'Idle';
-      const bActivity = userActivities.get(b.clerkId) || 'Idle';
+      const aActivity = userActivities.get(a.googleId) || 'Idle';
+      const bActivity = userActivities.get(b.googleId) || 'Idle';
       if (aActivity !== 'Idle' && bActivity === 'Idle') return -1;
       if (aActivity === 'Idle' && bActivity !== 'Idle') return 1;
 
@@ -84,10 +84,10 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
     });
 
   const renderUserItem = (userData: User) => {
-    const activity = userActivities.get(userData.clerkId) || 'Idle';
+    const activity = userActivities.get(userData.googleId) || 'Idle';
     const isPlaying = activity !== 'Idle';
-    const isOnline = onlineUsers.has(userData.clerkId);
-    const lastSeenTimestamp = userLastSeen.get(userData.clerkId);
+    const isOnline = onlineUsers.has(userData.googleId);
+    const lastSeenTimestamp = userLastSeen.get(userData.googleId);
 
     // Parse song info from activity
     const [songName, artistName] = isPlaying

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import axiosInstance from '../api/axios';
 import { AuthUser } from '../types';
 
@@ -66,7 +67,7 @@ interface AuthState {
 
     // Actions
     login: (userData: any, token: string) => void;
-    logout: () => void;
+    logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
     setIsLoading: (loading: boolean) => void;
     reset: () => void;
@@ -81,8 +82,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     login: (userData: any, token: string) => {
         // Parse user data
         const user: AuthUser = {
-            id: userData.id || userData.clerkId || userData._id || '',
-            clerkId: userData.clerkId || userData.id || '',
+            id: userData.id || userData.googleId || userData._id || '',
+            googleId: userData.googleId || userData.id || '',
             name: userData.name || userData.fullName || userData.firstName || '',
             fullName: userData.fullName || userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
             username: userData.username || '',
@@ -104,7 +105,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         });
     },
 
-    logout: () => {
+    logout: async () => {
+        // Sign out of Google to allow choosing different account next time
+        try {
+            // Must configure before signOut in case the app was restarted
+            GoogleSignin.configure({
+                webClientId: '207781069300-4lpf8lsjfp5ind0lf8r4boln7c4ajotp.apps.googleusercontent.com',
+                offlineAccess: false,
+            });
+            await GoogleSignin.signOut();
+        } catch (error) {
+            console.log('Google sign out error (may not be signed in):', error);
+        }
+
         // Clear persisted data
         removeToken();
         removeUserData();
@@ -144,8 +157,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     if (response.data) {
                         const userData = response.data;
                         const updatedUser: AuthUser = {
-                            id: userData._id || userData.id || userData.clerkId || storedUser.id,
-                            clerkId: userData.clerkId || userData._id || storedUser.clerkId,
+                            id: userData._id || userData.id || userData.googleId || storedUser.id,
+                            googleId: userData.googleId || userData._id || storedUser.googleId,
                             name: userData.name || userData.fullName || storedUser.name,
                             fullName: userData.fullName || userData.name || storedUser.fullName,
                             username: userData.username || storedUser.username,
@@ -169,8 +182,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             if (response.data) {
                 const userData = response.data;
                 const user: AuthUser = {
-                    id: userData._id || userData.id || userData.clerkId || '',
-                    clerkId: userData.clerkId || userData._id || '',
+                    id: userData._id || userData.id || userData.googleId || '',
+                    googleId: userData.googleId || userData._id || '',
                     name: userData.name || userData.fullName || '',
                     fullName: userData.fullName || userData.name || '',
                     username: userData.username || '',

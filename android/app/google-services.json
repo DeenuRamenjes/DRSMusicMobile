@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "207781069300",
+    "project_id": "drs-music-ea7c6",
+    "storage_bucket": "drs-music-ea7c6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:207781069300:android:3c4e1d6d6849aebaf439a1",
+        "android_client_info": {
+          "package_name": "com.drsmusicmobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "207781069300-62tr3jld2mvu79d60eoi3s94jhc6uqfi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.drsmusicmobile",
+            "certificate_hash": "1726a728d25af636a1e5f40d6623261f83e8e642"
+          }
+        },
+        {
+          "client_id": "207781069300-tj0rg98ogr3oq359a8ba9adn5081dkgl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.drsmusicmobile",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "207781069300-4lpf8lsjfp5ind0lf8r4boln7c4ajotp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8WNrFb--iyCEeHKZLL13zAGJKJAsuTew"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "207781069300-4lpf8lsjfp5ind0lf8r4boln7c4ajotp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

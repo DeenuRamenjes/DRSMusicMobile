@@ -32,7 +32,7 @@ interface AdminUser {
   name: string;
   email?: string;
   image?: string;
-  clerkId: string;
+  googleId: string;
   createdAt?: string;
   likedSongs?: string[];
 }
@@ -247,7 +247,7 @@ export const ManageUsersScreen = () => {
   };
 
   const renderUserItem = ({ item: user }: { item: AdminUser }) => {
-    const isOnline = onlineUsers.has(user.clerkId);
+    const isOnline = onlineUsers.has(user.googleId);
 
     return (
       <View style={styles.userCard}>

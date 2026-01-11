@@ -25,6 +25,7 @@ import { useMusicStore } from '../store/useMusicStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { User, Message, Song } from '../types';
 import { getFullImageUrl } from '../config';
+import { formatDuration } from '../utils/duration';
 
 type ChatScreenRouteProp = RouteProp<{ Chat: { user: User } }, 'Chat'>;
 
@@ -78,13 +79,6 @@ const MessageBubble = ({
 }) => {
   const isSongMessage = message.messageType === 'song' && message.songData;
 
-  // Format duration from seconds to mm:ss
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   return (
     <View style={[styles.messageBubbleContainer, isOwn && styles.messageBubbleContainerOwn]}>
       {!isOwn && (
@@ -100,10 +94,10 @@ const MessageBubble = ({
           )}
         </View>
       )}
-      
+
       {isSongMessage ? (
         // Song Message Card
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.songMessageCard, isOwn ? { backgroundColor: themeColor } : styles.songCardReceived]}
           onPress={() => onPlaySong?.(message.songData)}
           activeOpacity={0.8}
@@ -112,8 +106,8 @@ const MessageBubble = ({
             {/* Album Art */}
             <View style={styles.songAlbumArt}>
               {message.songData?.imageUrl ? (
-                <Image 
-                  source={{ uri: getFullImageUrl(message.songData.imageUrl) }} 
+                <Image
+                  source={{ uri: getFullImageUrl(message.songData.imageUrl) }}
                   style={styles.songAlbumImage}
                 />
               ) : (
@@ -122,7 +116,7 @@ const MessageBubble = ({
                 </View>
               )}
             </View>
-            
+
             {/* Song Info */}
             <View style={styles.songInfo}>
               <Text style={[styles.songTitle, isOwn && styles.songTitleOwn]} numberOfLines={1}>
@@ -137,13 +131,13 @@ const MessageBubble = ({
                 </Text>
               )}
             </View>
-            
+
             {/* Play/Pause Button */}
             <View style={[styles.playButton, { backgroundColor: isOwn ? 'rgba(255,255,255,0.2)' : themeColor }]}>
               <Icon name={isCurrentlyPlaying ? "pause" : "play"} size={18} color="#fff" />
             </View>
           </View>
-          
+
           <Text style={[styles.messageTime, isOwn && styles.messageTimeOwn, { marginTop: SPACING.xs }]}>
             {formatMessageTime(message.createdAt)}
           </Text>
@@ -174,7 +168,7 @@ export const ChatScreen = () => {
   const navigation = useNavigation();
   const route = useRoute<ChatScreenRouteProp>();
   const { user: chatUser } = route.params;
-  
+
   const { user: authUser } = useAuthStore();
   const { colors: themeColors } = useThemeStore();
   const {
@@ -189,7 +183,7 @@ export const ChatScreen = () => {
     setChatScreenActive,
     clearUnreadCount,
   } = useFriendsStore();
-  
+
   const { songs, fetchSongs } = useMusicStore();
   const { playSong, isPlaying: isSongPlaying, currentSong, togglePlayPause } = usePlayerStore();
 
@@ -200,8 +194,8 @@ export const ChatScreen = () => {
   const [songSearchQuery, setSongSearchQuery] = useState('');
 
   // Get user IDs
-  const currentUserId = authUser?.clerkId || authUser?.id || '';
-  const chatUserId = chatUser.clerkId || chatUser._id;
+  const currentUserId = authUser?.googleId || authUser?.id || '';
+  const chatUserId = chatUser.googleId || chatUser._id;
 
   // Check if user is online
   const isOnline = onlineUsers.has(chatUserId);
@@ -222,16 +216,16 @@ export const ChatScreen = () => {
     setSelectedUser(chatUser);
     setChatScreenActive(true);
     clearUnreadCount(chatUserId);
-    
+
     if (chatUserId) {
       fetchMessages(chatUserId);
     }
-    
+
     // Fetch songs for song picker
     if (songs.length === 0) {
       fetchSongs();
     }
-    
+
     return () => {
       setSelectedUser(null);
       setChatScreenActive(false);
@@ -249,11 +243,11 @@ export const ChatScreen = () => {
 
   const handleSend = useCallback(() => {
     if (!messageText.trim()) return;
-    
+
     sendMessage(chatUserId, currentUserId, messageText.trim());
     setMessageText('');
     Keyboard.dismiss();
-    
+
     // Scroll to bottom after sending
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
@@ -272,7 +266,7 @@ export const ChatScreen = () => {
     });
     setShowSongPicker(false);
     setSongSearchQuery('');
-    
+
     // Scroll to bottom after sending
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
@@ -282,7 +276,7 @@ export const ChatScreen = () => {
   // Handle playing a song from a message
   const handlePlaySong = useCallback((songData: Message['songData']) => {
     if (!songData) return;
-    
+
     // Create a Song object from songData
     const song: Song = {
       _id: songData.songId,
@@ -295,7 +289,7 @@ export const ChatScreen = () => {
       createdAt: '',
       updatedAt: '',
     };
-    
+
     playSong(song);
   }, [playSong]);
 
@@ -323,13 +317,13 @@ export const ChatScreen = () => {
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isOwn = item.senderId === currentUserId;
-    
+
     // Check if this song message is currently playing
-    const isSongCurrentlyPlaying = 
-      item.messageType === 'song' && 
-      item.songData?.songId === currentSong?._id && 
+    const isSongCurrentlyPlaying =
+      item.messageType === 'song' &&
+      item.songData?.songId === currentSong?._id &&
       isSongPlaying;
-    
+
     return (
       <MessageBubble
         message={item}
@@ -423,7 +417,7 @@ export const ChatScreen = () => {
 
         {/* Message Input - WhatsApp Style */}
         <View style={styles.inputContainer}>
-           <TouchableOpacity
+          <TouchableOpacity
             style={[styles.sendButton, { backgroundColor: themeColors.primary }]}
             onPress={() => setShowSongPicker(true)}
           >
@@ -447,17 +441,17 @@ export const ChatScreen = () => {
               multiline
               maxLength={1000}
             />
-          <TouchableOpacity
-            style={styles.attachButton}
-            onPress={handleSend}
-            disabled={!messageText.trim()}
-          >
-            <Icon
-              name={messageText.trim() ? 'send' : 'mic'}
-              size={20}
-              color={COLORS.textPrimary}
-            />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.attachButton}
+              onPress={handleSend}
+              disabled={!messageText.trim()}
+            >
+              <Icon
+                name={messageText.trim() ? 'send' : 'mic'}
+                size={20}
+                color={COLORS.textPrimary}
+              />
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -481,7 +475,7 @@ export const ChatScreen = () => {
                 <Icon name="x" size={24} color={COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
-            
+
             {/* Search Bar */}
             <View style={styles.songSearchContainer}>
               <Icon name="search" size={18} color={COLORS.textMuted} />
@@ -498,7 +492,7 @@ export const ChatScreen = () => {
                 </TouchableOpacity>
               )}
             </View>
-            
+
             {/* Songs List */}
             <FlatList
               data={filteredSongs}
@@ -524,7 +518,7 @@ export const ChatScreen = () => {
                     <Text style={styles.songItemTitle} numberOfLines={1}>{item.title}</Text>
                     <Text style={styles.songItemArtist} numberOfLines={1}>{item.artist}</Text>
                   </View>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.songItemSendButton, { backgroundColor: themeColors.primary }]}
                     onPress={() => handleSendSong(item)}
                   >

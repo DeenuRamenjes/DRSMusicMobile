@@ -21,13 +21,18 @@ import { useMusicStore } from '../store/useMusicStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+import { formatDuration } from '../utils/duration';
+import { usePlayerStore } from '../store/usePlayerStore';
+
 
 export const ManageSongsScreen = () => {
   const navigation = useNavigation();
   const { colors: themeColors } = useThemeStore();
   const { songs, fetchSongs, deleteSong, isLoading, error } = useMusicStore();
   const { dialogState, hideDialog, showSuccess, showError } = useDialog();
-  
+  const { currentSong, isPlaying, playSong, pauseSong } = usePlayerStore();
+
+
   const [searchTerm, setSearchTerm] = useState('');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -62,45 +67,71 @@ export const ManageSongsScreen = () => {
     }
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const handleTogglePlay = (song: Song) => {
+    if (currentSong?._id === song._id) {
+      if (isPlaying) {
+        pauseSong();
+      } else {
+        playSong(song);
+      }
+    } else {
+      playSong(song);
+    }
   };
 
-  const renderSongItem = ({ item: song }: { item: Song }) => (
-    <View style={styles.songCard}>
-      <Image
-        source={{ uri: getFullImageUrl(song.imageUrl) }}
-        style={styles.songImage}
-      />
-      <View style={styles.songInfo}>
-        <Text style={styles.songTitle} numberOfLines={1}>
-          {song.title}
-        </Text>
-        <Text style={styles.songArtist} numberOfLines={1}>
-          {song.artist}
-        </Text>
-        <Text style={styles.songDuration}>
-          {formatDuration(song.duration)}
-        </Text>
-      </View>
-      <View style={styles.songActions}>
+
+  const renderSongItem = ({ item: song }: { item: Song }) => {
+    const isCurrentSong = currentSong?._id === song._id;
+    const isThisPlaying = isCurrentSong && isPlaying;
+
+    return (
+      <View style={styles.songCard}>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: themeColors.primaryMuted }]}
-          onPress={() => (navigation as any).navigate('EditSong', { song })}
+          style={styles.imageContainer}
+          onPress={() => handleTogglePlay(song)}
+          activeOpacity={0.8}
         >
-          <Icon name="edit-2" size={16} color={themeColors.primary} />
+          <Image
+            source={{ uri: getFullImageUrl(song.imageUrl) }}
+            style={[styles.songImage, isCurrentSong && { borderColor: themeColors.primary, borderWidth: 2 }]}
+          />
+          <View style={styles.playOverlay}>
+            <Icon
+              name={isThisPlaying ? "pause" : "play"}
+              size={20}
+              color="#fff"
+            />
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => setPendingDelete({ id: song._id, title: song.title })}
-        >
-          <Icon name="trash-2" size={16} color="#ef4444" />
-        </TouchableOpacity>
+        <View style={styles.songInfo}>
+          <Text style={[styles.songTitle, isCurrentSong && { color: themeColors.primary }]} numberOfLines={1}>
+            {song.title}
+          </Text>
+          <Text style={styles.songArtist} numberOfLines={1}>
+            {song.artist}
+          </Text>
+          <Text style={styles.songDuration}>
+            {formatDuration(song.duration)}
+          </Text>
+        </View>
+
+        <View style={styles.songActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: themeColors.primaryMuted }]}
+            onPress={() => (navigation as any).navigate('EditSong', { song })}
+          >
+            <Icon name="edit-2" size={16} color={themeColors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => setPendingDelete({ id: song._id, title: song.title })}
+          >
+            <Icon name="trash-2" size={16} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (isLoading && songs.length === 0) {
     return (
@@ -124,14 +155,14 @@ export const ManageSongsScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="arrow-left" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Manage Songs</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => (navigation as any).navigate('UploadSong')}
           style={[styles.addButton, { backgroundColor: themeColors.primary }]}
         >
@@ -164,7 +195,7 @@ export const ManageSongsScreen = () => {
           {filteredSongs.length} {filteredSongs.length === 1 ? 'song' : 'songs'}
           {searchTerm && ` matching "${searchTerm}"`}
         </Text>
-        <TouchableOpacity onPress={fetchSongs}>
+        <TouchableOpacity onPress={() => fetchSongs()}>
           <Icon name="refresh-cw" size={16} color={COLORS.textMuted} />
         </TouchableOpacity>
       </View>
@@ -177,8 +208,8 @@ export const ManageSongsScreen = () => {
             {searchTerm ? 'No songs found' : 'No songs yet'}
           </Text>
           <Text style={styles.emptySubtitle}>
-            {searchTerm 
-              ? `No songs matching "${searchTerm}"` 
+            {searchTerm
+              ? `No songs matching "${searchTerm}"`
               : 'Tap the + button to upload your first song'
             }
           </Text>
@@ -336,6 +367,22 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: BORDER_RADIUS.md,
+  },
+  imageContainer: {
+    position: 'relative',
+    width: 56,
+    height: 56,
+  },
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: BORDER_RADIUS.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   songInfo: {
     flex: 1,

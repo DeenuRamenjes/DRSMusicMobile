@@ -190,13 +190,13 @@ export const MessagesScreen = () => {
   };
 
   // Filter out current user and sort by last message time, then unread, then online
-  const currentUserId = authUser?.clerkId || authUser?.id || '';
+  const currentUserId = authUser?.googleId || authUser?.id || '';
   const sortedUsers = [...users]
-    .filter((u) => u.clerkId !== currentUserId && u._id !== currentUserId)
+    .filter((u) => u.googleId !== currentUserId && u._id !== currentUserId)
     .sort((a, b) => {
       // Sort by last message time first (most recent first)
-      const aLastMsg = lastMessages[a.clerkId];
-      const bLastMsg = lastMessages[b.clerkId];
+      const aLastMsg = lastMessages[a.googleId];
+      const bLastMsg = lastMessages[b.googleId];
       if (aLastMsg && bLastMsg) {
         return new Date(bLastMsg.createdAt).getTime() - new Date(aLastMsg.createdAt).getTime();
       }
@@ -204,18 +204,18 @@ export const MessagesScreen = () => {
       if (!aLastMsg && bLastMsg) return 1;
 
       // Then by unread messages
-      const aUnread = unreadCounts[a.clerkId] || 0;
-      const bUnread = unreadCounts[b.clerkId] || 0;
+      const aUnread = unreadCounts[a.googleId] || 0;
+      const bUnread = unreadCounts[b.googleId] || 0;
       if (aUnread !== bUnread) return bUnread - aUnread;
 
       // Then by online status
-      const aOnline = onlineUsers.has(a.clerkId);
-      const bOnline = onlineUsers.has(b.clerkId);
+      const aOnline = onlineUsers.has(a.googleId);
+      const bOnline = onlineUsers.has(b.googleId);
       if (aOnline !== bOnline) return bOnline ? 1 : -1;
 
       // Then by activity
-      const aActivity = userActivities.get(a.clerkId) || 'Idle';
-      const bActivity = userActivities.get(b.clerkId) || 'Idle';
+      const aActivity = userActivities.get(a.googleId) || 'Idle';
+      const bActivity = userActivities.get(b.googleId) || 'Idle';
       if (aActivity !== 'Idle' && bActivity === 'Idle') return -1;
       if (aActivity === 'Idle' && bActivity !== 'Idle') return 1;
 
@@ -225,11 +225,11 @@ export const MessagesScreen = () => {
   const renderUserItem = ({ item }: { item: User }) => (
     <UserChatItem
       user={item}
-      isOnline={onlineUsers.has(item.clerkId)}
-      activity={userActivities.get(item.clerkId) || 'Idle'}
-      lastSeen={userLastSeen.get(item.clerkId)}
-      lastMessage={lastMessages[item.clerkId]}
-      unreadCount={unreadCounts[item.clerkId] || 0}
+      isOnline={onlineUsers.has(item.googleId)}
+      activity={userActivities.get(item.googleId) || 'Idle'}
+      lastSeen={userLastSeen.get(item.googleId)}
+      lastMessage={lastMessages[item.googleId]}
+      unreadCount={unreadCounts[item.googleId] || 0}
       themeColor={themeColors.primary}
       currentUserId={currentUserId}
       onPress={() => handleUserPress(item)}

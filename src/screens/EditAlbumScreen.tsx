@@ -23,6 +23,9 @@ import { useMusicStore } from '../store/useMusicStore';
 import { Album, Song } from '../types';
 import { getFullImageUrl } from '../config';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+import { formatDuration } from '../utils/duration';
+import { usePlayerStore } from '../store/usePlayerStore';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IMAGE_SIZE = Math.min(SCREEN_WIDTH * 0.45, 180);
@@ -41,21 +44,23 @@ export const EditAlbumScreen = () => {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<EditAlbumRouteParams, 'EditAlbum'>>();
   const { album } = route.params;
-  
+
   const { colors: themeColors } = useThemeStore();
   const { updateAlbum, fetchAlbums, songs, fetchSongs, assignSongsToAlbum, isLoading: storeLoading } = useMusicStore();
   const { dialogState, hideDialog, showSuccess, showError } = useDialog();
-  
+  const { currentSong, isPlaying, playSong, pauseSong } = usePlayerStore();
+
+
   const [isLoading, setIsLoading] = useState(false);
   const [editedAlbum, setEditedAlbum] = useState({
     title: album.title,
     artist: album.artist,
     releaseYear: album.releaseYear?.toString() || new Date().getFullYear().toString(),
   });
-  
+
   const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(getFullImageUrl(album.imageUrl));
-  
+
   // Song management state
   const [showSongPicker, setShowSongPicker] = useState(false);
   const [songSearch, setSongSearch] = useState('');
@@ -85,7 +90,7 @@ export const EditAlbumScreen = () => {
       const result = await pick({
         type: [types.images],
       });
-      
+
       if (result && result.length > 0) {
         const file = result[0];
         setImageFile({
@@ -138,7 +143,7 @@ export const EditAlbumScreen = () => {
       formData.append('title', editedAlbum.title);
       formData.append('artist', editedAlbum.artist);
       formData.append('releaseYear', editedAlbum.releaseYear);
-      
+
       if (imageFile) {
         formData.append('imageFile', {
           uri: imageFile.uri,
@@ -168,53 +173,71 @@ export const EditAlbumScreen = () => {
     );
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    return `${mins} min`;
+  const handleTogglePlay = (song: Song) => {
+    if (currentSong?._id === song._id) {
+      if (isPlaying) {
+        pauseSong();
+      } else {
+        playSong(song);
+      }
+    } else {
+      playSong(song);
+    }
   };
+
 
   const renderSongItem = ({ item: song }: { item: Song }) => {
     const isSelected = selectedSongIds.includes(song._id);
+    const isCurrentSong = currentSong?._id === song._id;
+    const isThisPlaying = isCurrentSong && isPlaying;
 
-
-
-    if (isLoading) {
-          return (
-            <View style={styles.container}>
-              <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-            </View>
-          );
-        }
-    
     return (
-      <TouchableOpacity
-        style={[
-          styles.songItem,
-          isSelected && { backgroundColor: themeColors.primaryMuted, borderColor: themeColors.primary + '50' },
-        ]}
-        onPress={() => toggleSong(song._id)}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.checkbox, isSelected && { borderColor: themeColors.primary, backgroundColor: themeColors.primary }]}>
-          {isSelected && <Icon name="check" size={12} color="#fff" />}
-        </View>
-        <Image 
-          source={{ uri: getFullImageUrl(song.imageUrl) }} 
-          style={styles.songItemImage}
-        />
-        <View style={styles.songItemInfo}>
-          <Text style={styles.songItemTitle} numberOfLines={1}>{song.title}</Text>
-          <Text style={styles.songItemArtist} numberOfLines={1}>{song.artist}</Text>
-        </View>
-        <Text style={styles.songItemDuration}>{formatDuration(song.duration)}</Text>
-      </TouchableOpacity>
+      <View style={[
+        styles.songItemContainer,
+        isSelected && { backgroundColor: themeColors.primaryMuted, borderColor: themeColors.primary + '50' }
+      ]}>
+        <TouchableOpacity
+          style={styles.songItemContent}
+          onPress={() => toggleSong(song._id)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.checkbox, isSelected && { borderColor: themeColors.primary, backgroundColor: themeColors.primary }]}>
+            {isSelected && <Icon name="check" size={12} color="#fff" />}
+          </View>
+
+          <View style={styles.songItemImageContainer}>
+            <Image
+              source={{ uri: getFullImageUrl(song.imageUrl) }}
+              style={[styles.songItemImage, isCurrentSong && { borderColor: themeColors.primary, borderWidth: 1 }]}
+            />
+            <TouchableOpacity
+              style={styles.songItemPlayOverlay}
+              onPress={() => handleTogglePlay(song)}
+              activeOpacity={0.8}
+            >
+              <Icon
+                name={isThisPlaying ? "pause" : "play"}
+                size={14}
+                color="#fff"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.songItemInfo}>
+            <Text style={[styles.songItemTitle, isCurrentSong && { color: themeColors.primary }]} numberOfLines={1}>{song.title}</Text>
+            <Text style={styles.songItemArtist} numberOfLines={1}>{song.artist}</Text>
+          </View>
+          <Text style={styles.songItemDuration}>{formatDuration(song.duration)}</Text>
+        </TouchableOpacity>
+      </View>
     );
   };
+
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -224,14 +247,14 @@ export const EditAlbumScreen = () => {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         {/* Image Upload - Square */}
         <Text style={styles.sectionTitle}>Cover Art</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.imageUploadContainer, { width: IMAGE_SIZE, height: IMAGE_SIZE }]}
           onPress={selectImageFile}
         >
@@ -294,7 +317,7 @@ export const EditAlbumScreen = () => {
               </Text>
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.songCountBox}>
             <Icon name="music" size={18} color={themeColors.primary} />
             <Text style={styles.songCountText}>
@@ -635,15 +658,18 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     paddingBottom: 100,
   },
-  songItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.sm,
+  songItemContainer: {
     backgroundColor: COLORS.zinc900,
     borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
     borderColor: 'transparent',
+    overflow: 'hidden',
+  },
+  songItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.sm,
     gap: SPACING.sm,
   },
   checkbox: {
@@ -655,10 +681,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  songItemImageContainer: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+  },
   songItemImage: {
     width: 44,
     height: 44,
     borderRadius: BORDER_RADIUS.sm,
+  },
+  songItemPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: BORDER_RADIUS.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   songItemInfo: {
     flex: 1,

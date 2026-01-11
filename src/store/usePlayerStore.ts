@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Song } from '../types';
 import axiosInstance from '../api/axios';
 import { getFullAudioUrl, getFullImageUrl } from '../config';
+import { parseDuration } from '../utils/duration';
+
 
 // Storage keys
 const LAST_SONG_KEY = '@drs_music_last_song';
@@ -161,8 +163,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             currentTime: 0,
             currentIndex: songIndex,
             audioUrl: audioUrl,
-            duration: song.duration || 0,
+            duration: parseDuration(song.duration) || 0,
             isLoading: false,
+
         };
 
         // Handle shuffle queue matching web app behavior
@@ -194,8 +197,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             isPlaying: false,
             isLoading: false,
             currentTime: 0,
-            duration: song.duration || 0,
+            duration: parseDuration(song.duration) || 0,
             audioUrl: null,
+
         });
 
         // Save as last played song for restoration
@@ -210,8 +214,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
                 isPlaying: false,
                 isLoading: false,
                 currentTime: 0,
-                duration: lastSong.duration || 0,
+                duration: parseDuration(lastSong.duration) || 0,
                 audioUrl: null,
+
             });
         }
     },
@@ -240,8 +245,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             currentIndex: boundedIndex,
             isPlaying: true,
             currentTime: 0,
-            duration: songToPlay.duration || 0,
+            duration: parseDuration(songToPlay.duration) || 0,
             audioUrl: audioUrl,
+
             shuffleQueue: state.isShuffle ? buildShuffleQueue(newQueue, songToPlay._id) : [],
             isLoading: false,
         });

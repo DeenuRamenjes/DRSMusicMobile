@@ -30,6 +30,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import { getFullImageUrl, getFullAudioUrl } from '../config';
 import { Song } from '../types';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+import { formatDuration } from '../utils/duration';
+
 import axiosInstance from '../api/axios';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -40,7 +42,7 @@ const ALBUM_ART_SIZE = Math.min(SCREEN_WIDTH - SPACING.xxl * 2, 320);
 // User type for share list
 interface ShareUser {
   _id: string;
-  clerkId: string;
+  googleId: string;
   name: string;
   email?: string;
   image?: string;
@@ -118,11 +120,6 @@ export const SongDetailScreen = () => {
   const progressBarRef = useRef<View>(null);
   const progressBarLayout = useRef<LayoutRectangle | null>(null);
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   // Handle seek when user taps on progress bar
   const handleSeek = (event: GestureResponderEvent) => {
@@ -193,7 +190,7 @@ export const SongDetailScreen = () => {
       const response = await axiosInstance.get('/users');
       // Filter out the current user from the list
       const users = (response.data || []).filter((u: ShareUser) =>
-        u.clerkId !== currentUser?.clerkId && u._id !== currentUser?.id
+        u.googleId !== currentUser?.googleId && u._id !== currentUser?.id
       );
       setShareUsers(users);
     } catch (error) {
@@ -211,7 +208,7 @@ export const SongDetailScreen = () => {
     setIsSending(user._id);
     try {
       await axiosInstance.post('/users/messages', {
-        receiverId: user.clerkId,
+        receiverId: user.googleId,
         content: `🎵 Check out this song: "${currentSong.title}" by ${currentSong.artist}`,
         messageType: 'song',
         songData: {
@@ -413,8 +410,9 @@ export const SongDetailScreen = () => {
             <Text style={styles.queueItemTitle} numberOfLines={1}>{item.title}</Text>
             <Text style={styles.queueItemArtist} numberOfLines={1}>{item.artist}</Text>
           </View>
-          <Text style={styles.queueItemDuration}>{formatTime(item.duration || 0)}</Text>
+          <Text style={styles.queueItemDuration}>{formatDuration(item.duration || 0)}</Text>
           <TouchableOpacity
+
             style={styles.queueItemMenuButton}
             onPress={() => setQueueItemMenuId(isMenuVisible ? null : item._id)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -518,10 +516,11 @@ export const SongDetailScreen = () => {
               <View style={[styles.progressHandle, { left: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
             </TouchableOpacity>
             <View style={styles.timeContainer}>
-              <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-              <Text style={styles.timeText}>{formatTime(duration)}</Text>
+              <Text style={styles.timeText}>{formatDuration(currentTime)}</Text>
+              <Text style={styles.timeText}>{formatDuration(duration)}</Text>
             </View>
           </View>
+
 
           {/* Main Controls */}
           <View style={styles.mainControls}>

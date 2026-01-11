@@ -20,6 +20,7 @@ import { useMusicStore } from '../store/useMusicStore';
 import { Song } from '../types';
 import { getFullImageUrl } from '../config';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+import { formatDuration } from '../utils/duration';
 
 type EditSongRouteParams = {
   EditSong: { song: Song };
@@ -29,19 +30,19 @@ export const EditSongScreen = () => {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<EditSongRouteParams, 'EditSong'>>();
   const { song } = route.params;
-  
+
   const { colors: themeColors } = useThemeStore();
   const { updateSong, fetchSongs, albums, fetchAlbums } = useMusicStore();
   const { dialogState, hideDialog, showSuccess, showError } = useDialog();
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [editedSong, setEditedSong] = useState({
     title: song.title,
     artist: song.artist,
-    duration: song.duration?.toString() || '0',
+    duration: String(song.duration) || '0',
     albumIds: song.albumIds || [],
   });
-  
+
   const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(getFullImageUrl(song.imageUrl));
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
@@ -55,7 +56,7 @@ export const EditSongScreen = () => {
       const result = await pick({
         type: [types.images],
       });
-      
+
       if (result && result.length > 0) {
         const file = result[0];
         setImageFile({
@@ -99,7 +100,7 @@ export const EditSongScreen = () => {
       formData.append('artist', editedSong.artist);
       formData.append('duration', editedSong.duration);
       formData.append('albumIds', JSON.stringify(editedSong.albumIds));
-      
+
       if (imageFile) {
         formData.append('imageFile', {
           uri: imageFile.uri,
@@ -120,19 +121,13 @@ export const EditSongScreen = () => {
     }
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const hasChanges = () => {
     const originalAlbumIds = song.albumIds || [];
     const currentAlbumIds = editedSong.albumIds;
-    const albumsChanged = 
+    const albumsChanged =
       originalAlbumIds.length !== currentAlbumIds.length ||
       !originalAlbumIds.every(id => currentAlbumIds.includes(id));
-    
+
     return (
       editedSong.title !== song.title ||
       editedSong.artist !== song.artist ||
@@ -142,18 +137,18 @@ export const EditSongScreen = () => {
     );
   };
 
-   if (isLoading) {
-      return (
-        <View style={styles.container}>
-          <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-        </View>
-      );
-    }
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -163,14 +158,14 @@ export const EditSongScreen = () => {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         {/* Image Upload */}
         <Text style={styles.sectionTitle}>Cover Art</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.imageUploadContainer}
           onPress={selectImageFile}
         >
@@ -235,7 +230,7 @@ export const EditSongScreen = () => {
             </TouchableOpacity>
           )}
         </View>
-        
+
         <TouchableOpacity
           style={styles.albumPickerButton}
           onPress={() => setShowAlbumPicker(!showAlbumPicker)}
@@ -245,10 +240,10 @@ export const EditSongScreen = () => {
               ? 'No albums selected (single)'
               : `${editedSong.albumIds.length} album${editedSong.albumIds.length > 1 ? 's' : ''} selected`}
           </Text>
-          <Icon 
-            name={showAlbumPicker ? 'chevron-up' : 'chevron-down'} 
-            size={20} 
-            color={COLORS.textMuted} 
+          <Icon
+            name={showAlbumPicker ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={COLORS.textMuted}
           />
         </TouchableOpacity>
 

@@ -45,7 +45,7 @@ interface FriendsState {
         artist: string;
         imageUrl: string;
         audioUrl: string;
-        duration: number;
+        duration: string | number;
     }) => void;
     setChatScreenActive: (active: boolean) => void;
     clearUnreadCount: (userId: string) => void;
@@ -112,11 +112,11 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             await Promise.all(
                 users.map(async (user) => {
                     try {
-                        const response = await axiosInstance.get(`/users/messages/${user.clerkId}`);
+                        const response = await axiosInstance.get(`/users/messages/${user.googleId}`);
                         const messages = response.data;
                         if (messages && messages.length > 0) {
                             // Get the last message (messages are sorted by createdAt)
-                            lastMessagesMap[user.clerkId] = messages[messages.length - 1];
+                            lastMessagesMap[user.googleId] = messages[messages.length - 1];
                         }
                     } catch (error) {
                         // Ignore errors for individual users
@@ -189,7 +189,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
             if (data && typeof data === 'object') {
                 // Try different property names the server might use
-                activityUserId = data.userId || data.user_id || data.clerkId || data.id;
+                activityUserId = data.userId || data.user_id || data.googleId || data.id;
                 activity = data.activity || data.status || data.message;
             } else if (Array.isArray(data) && data.length >= 2) {
                 // Server might send as array [userId, activity]
@@ -222,11 +222,11 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             const isActiveConversation =
                 isChatScreenActive &&
                 selectedUser &&
-                message.senderId === selectedUser.clerkId;
+                message.senderId === selectedUser.googleId;
 
             // Always add to messages if it's part of the current conversation
             if (selectedUser &&
-                (message.senderId === selectedUser.clerkId || message.receiverId === selectedUser.clerkId)) {
+                (message.senderId === selectedUser.googleId || message.receiverId === selectedUser.googleId)) {
                 set((prev) => ({
                     messages: [...prev.messages, message],
                 }));
@@ -246,7 +246,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
                 Vibration.vibrate(100);
 
                 // Find sender info for notification - check local cache first
-                let sender = users.find((u) => u.clerkId === message.senderId);
+                let sender = users.find((u) => u.googleId === message.senderId);
 
                 // If sender not in local users, refresh the users list
                 if (!sender && users.length === 0) {
@@ -254,7 +254,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
                         const response = await axiosInstance.get('/users');
                         if (response.data && Array.isArray(response.data)) {
                             set({ users: response.data });
-                            sender = response.data.find((u: User) => u.clerkId === message.senderId);
+                            sender = response.data.find((u: User) => u.googleId === message.senderId);
                         }
                     } catch (error) {
                         console.error('[Socket] Could not fetch users:', error);
@@ -281,7 +281,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
 
         socketInstance.on('message_sent', (message: Message) => {
             const currentUser = get().selectedUser;
-            if (currentUser && (message.senderId === currentUser.clerkId || message.receiverId === currentUser.clerkId)) {
+            if (currentUser && (message.senderId === currentUser.googleId || message.receiverId === currentUser.googleId)) {
                 set((state) => {
                     // Check if message already exists by _id
                     const messageExists = state.messages.some(m => m._id === message._id);
@@ -435,7 +435,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
         artist: string;
         imageUrl: string;
         audioUrl: string;
-        duration: number;
+        duration: string | number;
     }) => {
         const socket = get().socket;
         const isConnected = get().isConnected;

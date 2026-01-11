@@ -31,7 +31,7 @@ export interface Song {
     albumIds?: string[];
     imageUrl: string;
     audioUrl: string;
-    duration: number; // in seconds
+    duration: string | number; // Can be "2:10" (from DB) or seconds as number
     createdAt: string;
     updatedAt?: string;
     isLiked?: boolean;
@@ -90,7 +90,7 @@ export interface UserSettings {
 // User model matching backend
 export interface User {
     _id: string;
-    clerkId: string;
+    googleId: string;
     name: string;
     fullName?: string;
     username?: string;
@@ -106,7 +106,7 @@ export interface User {
 // AuthUser for auth store (simplified)
 export interface AuthUser {
     id: string;
-    clerkId: string;
+    googleId: string;
     name?: string;
     fullName?: string;
     username?: string;
@@ -130,7 +130,7 @@ export interface Message {
         artist: string;
         imageUrl: string;
         audioUrl: string;
-        duration: number;
+        duration: string | number;
     };
 }
 

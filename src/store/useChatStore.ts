@@ -9,7 +9,7 @@ interface Message {
 }
 
 interface ChatUser {
-    clerkId: string;
+    googleId: string;
     fullName: string;
     imageUrl: string;
 }

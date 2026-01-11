@@ -22,6 +22,8 @@ import { useThemeStore } from '../store/useThemeStore';
 import { useMusicStore } from '../store/useMusicStore';
 import axiosInstance from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
+import { formatDuration } from '../utils/duration';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IMAGE_SIZE = Math.min(SCREEN_WIDTH * 0.45, 180);
@@ -98,7 +100,7 @@ const generatePlaceholderData = (title: string, artist: string): PlaceholderData
   const color1 = hslToHex(baseHue, 70, 20);
   const color2 = hslToHex((baseHue + 45) % 360, 70, 45);
   const artistColor = hslToHex((baseHue + 20) % 360, 60, 80);
-  
+
   return {
     gradientColors: [color1, color2],
     artistColor,
@@ -112,7 +114,7 @@ export const UploadSongScreen = () => {
   const { colors: themeColors } = useThemeStore();
   const { albums, fetchAlbums, fetchSongs } = useMusicStore();
   const { dialogState, hideDialog, showSuccess, showError } = useDialog();
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [newSong, setNewSong] = useState<NewSong>({
     title: '',
@@ -120,13 +122,13 @@ export const UploadSongScreen = () => {
     albumIds: [],
     duration: '0',
   });
-  
+
   const [audioFile, setAudioFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
   const [isExtractingDuration, setIsExtractingDuration] = useState(false);
-  
+
   // Placeholder data for preview when no image selected
   const [placeholderData, setPlaceholderData] = useState<PlaceholderData | null>(null);
 
@@ -159,7 +161,7 @@ export const UploadSongScreen = () => {
       const result = await pick({
         type: [types.audio],
       });
-      
+
       if (result && result.length > 0) {
         const file = result[0];
         const fileData = {
@@ -205,7 +207,7 @@ export const UploadSongScreen = () => {
       const result = await pick({
         type: [types.images],
       });
-      
+
       if (result && result.length > 0) {
         const file = result[0];
         setImageFile({
@@ -254,13 +256,13 @@ export const UploadSongScreen = () => {
       formData.append('artist', newSong.artist);
       formData.append('duration', newSong.duration || '0');
       formData.append('albumIds', JSON.stringify(newSong.albumIds));
-      
+
       formData.append('audioFile', {
         uri: audioFile.uri,
         name: audioFile.name,
         type: audioFile.type,
       } as any);
-      
+
       // If image was selected, send it. Otherwise, request placeholder generation
       if (imageFile) {
         formData.append('imageFile', {
@@ -289,16 +291,12 @@ export const UploadSongScreen = () => {
     }
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+
 
   // Render placeholder preview
   const renderPlaceholderPreview = () => {
     if (!placeholderData) return null;
-    
+
     return (
       <LinearGradient
         colors={placeholderData.gradientColors}
@@ -311,7 +309,7 @@ export const UploadSongScreen = () => {
         <View style={[styles.decorCircle, { top: '60%', right: '10%', width: 80, height: 80 }]} />
         <View style={[styles.decorCircle, { bottom: '15%', left: '20%', width: 50, height: 50 }]} />
         <View style={[styles.decorCircle, { top: '30%', right: '5%', width: 55, height: 55 }]} />
-        
+
         {/* Text content */}
         <View style={styles.placeholderTextContainer}>
           <Text style={styles.placeholderTitle} numberOfLines={2}>
@@ -328,7 +326,7 @@ export const UploadSongScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
+
       {/* Hidden Video component for audio duration extraction */}
       {audioUri && (
         <Video
@@ -350,14 +348,14 @@ export const UploadSongScreen = () => {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         {/* Image Upload - Square */}
         <Text style={styles.sectionTitle}>Cover Art</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.imageUploadContainer, { width: IMAGE_SIZE, height: IMAGE_SIZE }]}
           onPress={selectImageFile}
         >
@@ -386,14 +384,14 @@ export const UploadSongScreen = () => {
 
         {/* Audio Upload */}
         <Text style={styles.sectionTitle}>Audio File *</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.fileButton, audioFile && styles.fileButtonSelected]}
           onPress={selectAudioFile}
         >
-          <Icon 
-            name={audioFile ? 'check-circle' : 'music'} 
-            size={20} 
-            color={audioFile ? themeColors.primary : COLORS.textMuted} 
+          <Icon
+            name={audioFile ? 'check-circle' : 'music'}
+            size={20}
+            color={audioFile ? themeColors.primary : COLORS.textMuted}
           />
           <Text style={[styles.fileButtonText, audioFile && { color: themeColors.primary }]}>
             {audioFile ? audioFile.name.slice(0, 30) + (audioFile.name.length > 30 ? '...' : '') : 'Select Audio File'}
@@ -454,7 +452,7 @@ export const UploadSongScreen = () => {
             </TouchableOpacity>
           )}
         </View>
-        
+
         <TouchableOpacity
           style={styles.albumPickerButton}
           onPress={() => setShowAlbumPicker(!showAlbumPicker)}
@@ -464,10 +462,10 @@ export const UploadSongScreen = () => {
               ? 'No albums selected (single)'
               : `${newSong.albumIds.length} album${newSong.albumIds.length > 1 ? 's' : ''} selected`}
           </Text>
-          <Icon 
-            name={showAlbumPicker ? 'chevron-up' : 'chevron-down'} 
-            size={20} 
-            color={COLORS.textMuted} 
+          <Icon
+            name={showAlbumPicker ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={COLORS.textMuted}
           />
         </TouchableOpacity>
 

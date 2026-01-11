@@ -19,14 +19,9 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { Song, Album } from '../types';
 import { getFullImageUrl } from '../config';
+import { formatDuration } from '../utils/duration';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const formatDuration = (duration: number) => {
-  const minutes = Math.floor(duration / 60);
-  const seconds = duration % 60;
-  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-};
 
 // Album Card Component
 const AlbumCard = ({ album, onPress }: { album: Album; onPress: () => void }) => {

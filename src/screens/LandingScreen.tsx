@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,10 @@ import {
 } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
+import {
+  GoogleSignin,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import { COLORS, SPACING } from '../constants/theme';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
@@ -26,9 +29,9 @@ const DRSLogo = require('../assets/DRS-Logo.png');
 
 const { height } = Dimensions.get('window');
 
-// Clerk configuration - using clerk hosted pages
-// The publishable key decodes to: game-bunny-97.clerk.accounts.dev
-const CLERK_FRONTEND_API = 'https://game-bunny-97.accounts.dev';
+// Google Sign-In Configuration
+// Web Client ID from Firebase project drs-music-ea7c6 (207781069300)
+const WEB_CLIENT_ID = '207781069300-4lpf8lsjfp5ind0lf8r4boln7c4ajotp.apps.googleusercontent.com';
 
 export const LandingScreen = () => {
   const navigation = useNavigation();
@@ -36,96 +39,72 @@ export const LandingScreen = () => {
   const { colors: themeColors } = useThemeStore();
   const { dialogState, hideDialog, showError } = useDialog();
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [showWebView, setShowWebView] = useState(false);
-  const [webViewUrl, setWebViewUrl] = useState('');
-  
+
   // Email login states
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Handle Google Sign-In via Clerk WebView
-  const handleGoogleSignIn = () => {
-    // Use Clerk's sign-in page - it has the Google option
-    setWebViewUrl(`${CLERK_FRONTEND_API}/sign-in`);
-    setShowWebView(true);
-  };
+  // Configure Google Sign-In on mount
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: WEB_CLIENT_ID,
+      offlineAccess: false,
+    });
+  }, []);
 
-  // Handle WebView navigation changes
-  const handleWebViewNavigationChange = (navState: any) => {
-    const { url, loading } = navState;
+  // Handle Google Sign-In via native SDK
+  const handleGoogleSignIn = async () => {
+    if (isSigningIn) return;
+    setIsSigningIn(true);
 
-    // Check for successful OAuth callback
-    if (url.includes('oauth_callback') || url.includes('sso-callback')) {
-    }
-
-    // Check if we're on the Clerk dashboard (successful login)
-    if (url.includes('accounts.dev') && !loading) {
-      // Try to get user info
-    }
-  };
-
-  // Inject JS to detect successful login
-  const injectedJS = `
-    (function() {
-      // Try to detect Clerk session
-      if (typeof window !== 'undefined') {
-        const checkSession = setInterval(() => {
-          // Check if there's user info in the page
-          if (window.Clerk && window.Clerk.user) {
-            const user = window.Clerk.user;
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'auth_success',
-              user: {
-                id: user.id,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                email: user.primaryEmailAddress?.emailAddress,
-                imageUrl: user.imageUrl
-              }
-            }));
-            clearInterval(checkSession);
-          }
-        }, 500);
-        
-        // Stop checking after 30 seconds
-        setTimeout(() => clearInterval(checkSession), 30000);
-      }
-    })();
-    true;
-  `;
-
-  // Handle messages from WebView
-  const handleWebViewMessage = (event: any) => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
-      
-      if (data.type === 'auth_success' && data.user) {
-        const { id, firstName, lastName, email, imageUrl } = data.user;
-        const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'User';
-        handleAuthSuccess({
-          id,
-          name: fullName,
-          email: email || '',
-          imageUrl: imageUrl || '',
+      // Check if Google Play Services are available
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+      // Perform the sign-in
+      const response = await GoogleSignin.signIn();
+
+      if (response.type === 'success' && response.data?.user) {
+        const { user } = response.data;
+
+        // Call our backend with the Google user info
+        await handleAuthSuccess({
+          id: user.id,
+          name: user.name || user.givenName || 'User',
+          email: user.email,
+          imageUrl: user.photo || '',
         });
+      } else {
+        // User cancelled or sign-in was not successful
+        setIsSigningIn(false);
       }
-    } catch (e) {
-      // Not JSON
+    } catch (error: any) {
+      console.error('Google Sign-In Error:', error);
+      setIsSigningIn(false);
+
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled - no need to show error
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        showError('Sign In', 'Sign in is already in progress');
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        showError('Error', 'Google Play Services is not available');
+      } else {
+        showError('Error', error.message || 'Failed to sign in with Google');
+      }
     }
   };
 
   const handleAuthSuccess = async (userData: any) => {
-    setShowWebView(false);
     setIsSigningIn(true);
-    
+
     try {
       // Get a proper mobile token from the backend
       const response = await axiosInstance.post('/auth/mobile', {
         email: userData.email || '',
         name: userData.name,
         imageUrl: userData.imageUrl,
-        clerkId: userData.id, // Pass Clerk ID for sync
+        googleId: userData.id, // Pass Google ID for sync
       });
 
       const { user, token } = response.data;
@@ -137,7 +116,7 @@ export const LandingScreen = () => {
       login(
         {
           id: user.id || user._id,
-          clerkId: user.clerkId || userData.id,
+          googleId: user.googleId || userData.id,
           name: user.name || userData.name,
           fullName: user.fullName || userData.name,
           emailAddress: user.email || userData.email,
@@ -163,7 +142,7 @@ export const LandingScreen = () => {
   const handleDemoLogin = async () => {
     if (isSigningIn) return;
     setIsSigningIn(true);
-    
+
     try {
       // Use the mobile auth endpoint to get a proper token
       const response = await axiosInstance.post('/auth/mobile', {
@@ -181,7 +160,7 @@ export const LandingScreen = () => {
       login(
         {
           id: user.id,
-          clerkId: user.clerkId,
+          googleId: user.googleId,
           name: user.name,
           fullName: user.name,
           emailAddress: user.email,
@@ -207,7 +186,7 @@ export const LandingScreen = () => {
   // Handle Email/Password Login
   const handleEmailLogin = async () => {
     if (isSigningIn) return;
-    
+
     // Validate inputs
     if (!email.trim()) {
       showError('Error', 'Please enter your email address');
@@ -219,7 +198,7 @@ export const LandingScreen = () => {
     }
 
     setIsSigningIn(true);
-    
+
     try {
       // Call the email login endpoint
       const response = await axiosInstance.post('/auth/email-login', {
@@ -241,7 +220,7 @@ export const LandingScreen = () => {
       login(
         {
           id: user.id || user._id,
-          clerkId: user.clerkId,
+          googleId: user.googleId,
           name: user.name,
           fullName: user.name,
           emailAddress: user.email,
@@ -292,7 +271,7 @@ export const LandingScreen = () => {
             onPress={handleGoogleSignIn}
             disabled={isSigningIn}
           >
-            <Image 
+            <Image
               source={{ uri: 'https://www.google.com/favicon.ico' }}
               style={styles.googleLogo}
               resizeMode="contain"
@@ -317,7 +296,7 @@ export const LandingScreen = () => {
           {!USE_DEPLOYMENT && (
             <Pressable
               style={({ pressed }) => [
-                styles.demoButton, 
+                styles.demoButton,
                 { borderColor: themeColors.primary, backgroundColor: themeColors.primary + '30' },
                 pressed && styles.demoPressed
               ]}
@@ -348,7 +327,7 @@ export const LandingScreen = () => {
         transparent={true}
         onRequestClose={() => setShowEmailLogin(false)}
       >
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.emailModalOverlay}
         >
@@ -359,7 +338,7 @@ export const LandingScreen = () => {
                 <Text style={styles.emailModalClose}>✕</Text>
               </Pressable>
             </View>
-            
+
             <Text style={styles.emailModalSubtitle}>
               Sign in with your email. Google users can also use this to set up email/password login.
             </Text>
@@ -414,54 +393,6 @@ export const LandingScreen = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Clerk WebView Modal */}
-      <Modal
-        visible={showWebView}
-        animationType="slide"
-        onRequestClose={() => setShowWebView(false)}
-      >
-        <SafeAreaView style={styles.webViewContainer}>
-          <View style={styles.webViewHeader}>
-            <Pressable onPress={() => setShowWebView(false)} style={styles.closeBtn}>
-              <Text style={styles.closeText}>✕ Cancel</Text>
-            </Pressable>
-            <Text style={styles.webViewTitle}>Sign In</Text>
-            <View style={{ width: 80 }} />
-          </View>
-          <WebView
-            source={{ 
-              uri: webViewUrl || `${CLERK_FRONTEND_API}/sign-in`,
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/91.0.4472.120 Mobile Safari/537.36'
-              }
-            }}
-            style={styles.webView}
-            onNavigationStateChange={handleWebViewNavigationChange}
-            onMessage={handleWebViewMessage}
-            injectedJavaScript={injectedJS}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            thirdPartyCookiesEnabled={true}
-            sharedCookiesEnabled={true}
-            startInLoadingState={true}
-            incognito={false}
-            cacheEnabled={true}
-            renderLoading={() => (
-              <View style={styles.webViewLoading}>
-                <ActivityIndicator size="large" color={themeColors.primary} />
-                <Text style={styles.loadingText}>Loading Clerk Sign-In...</Text>
-              </View>
-            )}
-            onError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
-              console.error('WebView error:', nativeEvent);
-              setShowWebView(false);
-              showError('Error', 'Failed to load sign-in page. Please try demo login.');
-            }}
-          />
-        </SafeAreaView>
-      </Modal>
-
       {/* Custom Dialog */}
       <CustomDialog
         visible={dialogState.visible}
@@ -486,7 +417,7 @@ const FeatureRow = ({ icon, title, desc }: { icon: string; title: string; desc: 
 );
 
 const styles = StyleSheet.create({
-    DRSLogo: {
+  DRSLogo: {
     width: 120,
     height: 120,
   },
