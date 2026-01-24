@@ -27,8 +27,8 @@ const GRID_CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
 
 export const SongsScreen = () => {
   const navigation = useNavigation();
-  const { songs, isLoading, isFetchingMore, hasMore, currentPage, fetchSongs } = useMusicStore();
-  const { currentSong, isPlaying, playSong, pauseSong, setQueue } = usePlayerStore();
+  const { songs, isLoading, isFetchingMore, hasMore, currentPage, fetchSongs, fetchAllSongsForQueue } = useMusicStore();
+  const { currentSong, isPlaying, playSong, pauseSong, setQueue, playAlbum } = usePlayerStore();
   const { isOfflineMode, downloadedSongs } = useOfflineMusicStore();
   const { colors: themeColors, dimensions: themeDimensions, spacing: themeSpacing, fontSizes: themeFontSizes, compactMode } = useThemeStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -46,16 +46,12 @@ export const SongsScreen = () => {
   useEffect(() => {
     // Use downloaded songs when offline, otherwise use online songs
     if (isOfflineMode) {
-      // Only set queue if not currently playing something
-      if (!currentSong) {
-        setQueue(downloadedSongs as any);
-      }
+      setQueue(downloadedSongs as any);
       setFilteredSongs(downloadedSongs as any);
     } else if (songs.length > 0) {
-      // Only set queue initially (when no song is playing) to avoid resetting during lazy load
-      if (!currentSong) {
-        setQueue(songs);
-      }
+      // Always update queue when songs change (including lazy loaded songs)
+      // setQueue already handles preserving current song position
+      setQueue(songs);
       setFilteredSongs(songs);
     }
   }, [songs, isOfflineMode, downloadedSongs]);
@@ -75,7 +71,7 @@ export const SongsScreen = () => {
     );
   };
 
-  const handlePlayPause = (song: Song) => {
+  const handlePlayPause = async (song: Song) => {
     if (currentSong?._id === song._id) {
       if (isPlaying) {
         pauseSong();
@@ -83,7 +79,23 @@ export const SongsScreen = () => {
         playSong(song);
       }
     } else {
-      playSong(song);
+      // When starting to play a new song, fetch all songs for the queue
+      if (!isOfflineMode && hasMore) {
+        // Fetch all songs in the background and set up the queue
+        const allSongs = await fetchAllSongsForQueue();
+        const songIndex = allSongs.findIndex(s => s._id === song._id);
+        if (songIndex !== -1) {
+          playAlbum(allSongs, songIndex);
+        } else {
+          // Song not found in full list, just play it with current songs
+          playAlbum(songs, songs.findIndex(s => s._id === song._id));
+        }
+      } else {
+        // All songs already loaded or offline mode
+        const allSongs = isOfflineMode ? downloadedSongs : songs;
+        const songIndex = allSongs.findIndex(s => s._id === song._id);
+        playAlbum(allSongs as Song[], Math.max(0, songIndex));
+      }
     }
   };
 

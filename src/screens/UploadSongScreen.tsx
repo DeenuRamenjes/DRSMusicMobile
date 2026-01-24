@@ -20,7 +20,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useMusicStore } from '../store/useMusicStore';
-import axiosInstance from '../api/axios';
+import axiosInstance, { uploadWithFetch } from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
 import { formatDuration } from '../utils/duration';
 
@@ -35,12 +35,33 @@ interface NewSong {
   duration: string;
 }
 
+// Canvas style types
+type CanvasStyleType = 'gradient' | 'geometric' | 'waves' | 'minimal' | 'neon' | 'vintage';
+
+interface CanvasStyle {
+  id: CanvasStyleType;
+  name: string;
+  icon: string;
+}
+
+const CANVAS_STYLES: CanvasStyle[] = [
+  { id: 'gradient', name: 'Gradient', icon: 'sun' },
+  { id: 'geometric', name: 'Geometric', icon: 'octagon' },
+  { id: 'waves', name: 'Waves', icon: 'activity' },
+  { id: 'minimal', name: 'Minimal', icon: 'square' },
+  { id: 'neon', name: 'Neon', icon: 'zap' },
+  { id: 'vintage', name: 'Vintage', icon: 'disc' },
+];
+
 // Placeholder data type for preview
 interface PlaceholderData {
   gradientColors: [string, string];
   artistColor: string;
   title: string;
   artist: string;
+  style: CanvasStyleType;
+  accentColor?: string;
+  baseHue: number;
 }
 
 const extractSongDetailsFromFilename = (filename: string) => {
@@ -94,18 +115,58 @@ const hslToHex = (h: number, s: number, l: number): string => {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 };
 
-// Generate placeholder data for preview
-const generatePlaceholderData = (title: string, artist: string): PlaceholderData => {
+// Generate placeholder data for preview with different styles
+const generatePlaceholderData = (title: string, artist: string, style: CanvasStyleType = 'gradient'): PlaceholderData => {
   const baseHue = Math.floor(Math.random() * 360);
-  const color1 = hslToHex(baseHue, 70, 20);
-  const color2 = hslToHex((baseHue + 45) % 360, 70, 45);
-  const artistColor = hslToHex((baseHue + 20) % 360, 60, 80);
+  
+  let color1: string, color2: string, artistColor: string, accentColor: string;
+  
+  switch (style) {
+    case 'geometric':
+      color1 = hslToHex(baseHue, 60, 15);
+      color2 = hslToHex((baseHue + 30) % 360, 50, 25);
+      artistColor = hslToHex((baseHue + 180) % 360, 70, 75);
+      accentColor = hslToHex((baseHue + 120) % 360, 80, 50);
+      break;
+    case 'waves':
+      color1 = hslToHex(baseHue, 80, 25);
+      color2 = hslToHex((baseHue + 60) % 360, 70, 40);
+      artistColor = hslToHex((baseHue + 30) % 360, 60, 85);
+      accentColor = hslToHex((baseHue + 90) % 360, 90, 60);
+      break;
+    case 'minimal':
+      color1 = hslToHex(0, 0, 8);
+      color2 = hslToHex(0, 0, 15);
+      artistColor = hslToHex(baseHue, 70, 65);
+      accentColor = hslToHex(baseHue, 80, 55);
+      break;
+    case 'neon':
+      color1 = hslToHex(280, 100, 5);
+      color2 = hslToHex(320, 80, 10);
+      artistColor = hslToHex((baseHue + 180) % 360, 100, 70);
+      accentColor = hslToHex(baseHue, 100, 50);
+      break;
+    case 'vintage':
+      color1 = hslToHex(30, 40, 20);
+      color2 = hslToHex(35, 35, 30);
+      artistColor = hslToHex(40, 50, 75);
+      accentColor = hslToHex(25, 60, 50);
+      break;
+    default: // gradient
+      color1 = hslToHex(baseHue, 70, 20);
+      color2 = hslToHex((baseHue + 45) % 360, 70, 45);
+      artistColor = hslToHex((baseHue + 20) % 360, 60, 80);
+      accentColor = hslToHex((baseHue + 90) % 360, 70, 60);
+  }
 
   return {
     gradientColors: [color1, color2],
     artistColor,
+    accentColor,
     title: title || 'New Track',
     artist: artist || 'Unknown Artist',
+    style,
+    baseHue,
   };
 };
 
@@ -131,6 +192,8 @@ export const UploadSongScreen = () => {
 
   // Placeholder data for preview when no image selected
   const [placeholderData, setPlaceholderData] = useState<PlaceholderData | null>(null);
+  const [selectedCanvasStyle, setSelectedCanvasStyle] = useState<CanvasStyleType>('gradient');
+  const [showStylePicker, setShowStylePicker] = useState(false);
 
   // Video ref for duration extraction
   const videoRef = useRef<any>(null);
@@ -160,12 +223,29 @@ export const UploadSongScreen = () => {
     try {
       const result = await pick({
         type: [types.audio],
+        copyTo: 'cachesDirectory', // Copy file to cache for reliable upload
       });
 
       if (result && result.length > 0) {
         const file = result[0];
+        
+        // Log file details for debugging
+        console.log('Selected audio file:', JSON.stringify(file, null, 2));
+        
+        // Check file size (50MB limit)
+        const maxSize = 50 * 1024 * 1024; // 50MB in bytes
+        if (file.size && file.size > maxSize) {
+          const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          showError('File Too Large', `The selected file is ${sizeMB}MB. Maximum allowed size is 50MB.`);
+          return;
+        }
+        
+        // Use fileCopyUri if available (copied to cache), otherwise use original uri
+        const fileUri = (file as any).fileCopyUri || file.uri;
+        console.log('Using URI for upload:', fileUri);
+        
         const fileData = {
-          uri: file.uri,
+          uri: fileUri,
           name: file.name || 'audio.mp3',
           type: file.type || 'audio/mpeg',
         };
@@ -187,7 +267,7 @@ export const UploadSongScreen = () => {
 
         // Generate placeholder preview if no image selected
         if (!imageFile && !imagePreview) {
-          setPlaceholderData(generatePlaceholderData(extractedTitle, extractedArtist));
+          setPlaceholderData(generatePlaceholderData(extractedTitle, extractedArtist, selectedCanvasStyle));
         }
 
         // Extract duration using react-native-video
@@ -206,16 +286,20 @@ export const UploadSongScreen = () => {
     try {
       const result = await pick({
         type: [types.images],
+        copyTo: 'cachesDirectory', // Copy file to cache for reliable upload
       });
 
       if (result && result.length > 0) {
         const file = result[0];
+        // Use fileCopyUri if available (copied to cache), otherwise use original uri
+        const fileUri = (file as any).fileCopyUri || file.uri;
+        
         setImageFile({
-          uri: file.uri,
+          uri: fileUri,
           name: file.name || 'image.jpg',
           type: file.type || 'image/jpeg',
         });
-        setImagePreview(file.uri);
+        setImagePreview(fileUri);
         setPlaceholderData(null); // Clear placeholder when real image selected
       }
     } catch (err: any) {
@@ -251,6 +335,10 @@ export const UploadSongScreen = () => {
 
     setIsLoading(true);
     try {
+      console.log('=== UPLOAD SONG START ===');
+      console.log('Audio file:', audioFile);
+      console.log('Using uploadWithFetch (not axios)');
+      
       const formData = new FormData();
       formData.append('title', newSong.title);
       formData.append('artist', newSong.artist);
@@ -275,23 +363,104 @@ export const UploadSongScreen = () => {
         formData.append('generatePlaceholder', 'true');
       }
 
-      await axiosInstance.post('/admin/songs', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      await uploadWithFetch('/admin/songs', formData);
 
       fetchSongs();
       showSuccess('Success', 'Song uploaded successfully', () => navigation.goBack());
     } catch (error: any) {
       console.error('Error uploading song:', error);
-      showError('Error', error.response?.data?.message || 'Failed to upload song');
+      let errorMessage = 'Failed to upload song';
+      if (error.response?.status === 413) {
+        errorMessage = 'File is too large. Maximum audio file size is 50MB.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Upload timed out. Please check your connection and try again.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      showError('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
 
+
+  // Regenerate placeholder with current title/artist and selected style
+  const regeneratePlaceholder = () => {
+    const title = newSong.title || 'New Track';
+    const artist = newSong.artist || 'Unknown Artist';
+    setPlaceholderData(generatePlaceholderData(title, artist, selectedCanvasStyle));
+  };
+
+  // Change canvas style
+  const changeCanvasStyle = (style: CanvasStyleType) => {
+    setSelectedCanvasStyle(style);
+    const title = newSong.title || 'New Track';
+    const artist = newSong.artist || 'Unknown Artist';
+    setPlaceholderData(generatePlaceholderData(title, artist, style));
+    setShowStylePicker(false);
+  };
+
+  // Render decorations based on style
+  const renderStyleDecorations = () => {
+    if (!placeholderData) return null;
+    
+    const { style, accentColor } = placeholderData;
+    
+    switch (style) {
+      case 'geometric':
+        return (
+          <>
+            <View style={[styles.geometricShape, styles.triangle, { borderBottomColor: accentColor, top: '5%', left: '10%' }]} />
+            <View style={[styles.geometricShape, styles.diamond, { backgroundColor: accentColor, top: '50%', right: '5%' }]} />
+            <View style={[styles.geometricShape, styles.hexLine, { backgroundColor: accentColor, bottom: '20%', left: '5%' }]} />
+            <View style={[styles.geometricShape, styles.hexLine, { backgroundColor: accentColor, bottom: '25%', left: '15%', transform: [{ rotate: '60deg' }] }]} />
+          </>
+        );
+      case 'waves':
+        return (
+          <>
+            <View style={[styles.wave, { backgroundColor: accentColor, opacity: 0.3, top: '20%' }]} />
+            <View style={[styles.wave, { backgroundColor: accentColor, opacity: 0.2, top: '35%' }]} />
+            <View style={[styles.wave, { backgroundColor: accentColor, opacity: 0.15, top: '50%' }]} />
+          </>
+        );
+      case 'minimal':
+        return (
+          <>
+            <View style={[styles.minimalLine, { backgroundColor: accentColor, top: '15%', width: '40%' }]} />
+            <View style={[styles.minimalLine, { backgroundColor: accentColor, bottom: '15%', width: '30%', alignSelf: 'flex-end', right: 10 }]} />
+          </>
+        );
+      case 'neon':
+        return (
+          <>
+            <View style={[styles.neonGlow, { backgroundColor: accentColor, top: '10%', left: '10%' }]} />
+            <View style={[styles.neonGlow, { backgroundColor: placeholderData.artistColor, bottom: '20%', right: '15%' }]} />
+            <View style={[styles.neonLine, { backgroundColor: accentColor, top: '40%' }]} />
+          </>
+        );
+      case 'vintage':
+        return (
+          <>
+            <View style={styles.vintageBorder} />
+            <View style={[styles.vintageCorner, { top: 10, left: 10 }]} />
+            <View style={[styles.vintageCorner, { top: 10, right: 10, transform: [{ rotate: '90deg' }] }]} />
+            <View style={[styles.vintageCorner, { bottom: 10, left: 10, transform: [{ rotate: '-90deg' }] }]} />
+            <View style={[styles.vintageCorner, { bottom: 10, right: 10, transform: [{ rotate: '180deg' }] }]} />
+          </>
+        );
+      default: // gradient
+        return (
+          <>
+            <View style={[styles.decorCircle, { top: '10%', left: '5%', width: 60, height: 60 }]} />
+            <View style={[styles.decorCircle, { top: '60%', right: '10%', width: 80, height: 80 }]} />
+            <View style={[styles.decorCircle, { bottom: '15%', left: '20%', width: 50, height: 50 }]} />
+            <View style={[styles.decorCircle, { top: '30%', right: '5%', width: 55, height: 55 }]} />
+          </>
+        );
+    }
+  };
 
   // Render placeholder preview
   const renderPlaceholderPreview = () => {
@@ -304,11 +473,8 @@ export const UploadSongScreen = () => {
         end={{ x: 1, y: 1 }}
         style={styles.placeholderGradient}
       >
-        {/* Decorative circles */}
-        <View style={[styles.decorCircle, { top: '10%', left: '5%', width: 60, height: 60 }]} />
-        <View style={[styles.decorCircle, { top: '60%', right: '10%', width: 80, height: 80 }]} />
-        <View style={[styles.decorCircle, { bottom: '15%', left: '20%', width: 50, height: 50 }]} />
-        <View style={[styles.decorCircle, { top: '30%', right: '5%', width: 55, height: 55 }]} />
+        {/* Style-specific decorations */}
+        {renderStyleDecorations()}
 
         {/* Text content */}
         <View style={styles.placeholderTextContainer}>
@@ -375,9 +541,67 @@ export const UploadSongScreen = () => {
             </View>
           )}
         </TouchableOpacity>
+        
+        {/* Auto-gen controls - only show when using placeholder */}
+        {placeholderData && !imagePreview && (
+          <View style={styles.autoGenControls}>
+            {/* Regenerate button */}
+            <TouchableOpacity 
+              style={[styles.autoGenButton, { backgroundColor: themeColors.primaryMuted }]} 
+              onPress={regeneratePlaceholder}
+            >
+              <Icon name="refresh-cw" size={16} color={themeColors.primary} />
+              <Text style={[styles.autoGenButtonText, { color: themeColors.primary }]}>Regenerate</Text>
+            </TouchableOpacity>
+            
+            {/* Style picker button */}
+            <TouchableOpacity 
+              style={[styles.autoGenButton, { backgroundColor: themeColors.primaryMuted }]} 
+              onPress={() => setShowStylePicker(!showStylePicker)}
+            >
+              <Icon name="layers" size={16} color={themeColors.primary} />
+              <Text style={[styles.autoGenButtonText, { color: themeColors.primary }]}>
+                {CANVAS_STYLES.find(s => s.id === selectedCanvasStyle)?.name || 'Style'}
+              </Text>
+              <Icon name={showStylePicker ? 'chevron-up' : 'chevron-down'} size={14} color={themeColors.primary} />
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* Style picker dropdown */}
+        {showStylePicker && placeholderData && !imagePreview && (
+          <View style={styles.stylePickerContainer}>
+            {CANVAS_STYLES.map((style) => (
+              <TouchableOpacity
+                key={style.id}
+                style={[
+                  styles.styleOption,
+                  selectedCanvasStyle === style.id && { backgroundColor: themeColors.primaryMuted }
+                ]}
+                onPress={() => changeCanvasStyle(style.id)}
+              >
+                <Icon 
+                  name={style.icon} 
+                  size={18} 
+                  color={selectedCanvasStyle === style.id ? themeColors.primary : COLORS.textMuted} 
+                />
+                <Text style={[
+                  styles.styleOptionText,
+                  selectedCanvasStyle === style.id && { color: themeColors.primary }
+                ]}>
+                  {style.name}
+                </Text>
+                {selectedCanvasStyle === style.id && (
+                  <Icon name="check" size={16} color={themeColors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        
         <Text style={styles.imageHint}>
           {placeholderData && !imagePreview
-            ? 'This image will be auto-generated. Tap to select a custom image.'
+            ? 'This image will be auto-generated. Tap image to select a custom one.'
             : 'Optional: Tap to select cover art (will be auto-generated if not selected)'
           }
         </Text>
@@ -782,6 +1006,118 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
     color: COLORS.textPrimary,
+  },
+  // Auto-gen controls
+  autoGenControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  autoGenButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    gap: SPACING.xs,
+  },
+  autoGenButtonText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '500',
+  },
+  stylePickerContainer: {
+    backgroundColor: COLORS.zinc800,
+    borderRadius: BORDER_RADIUS.md,
+    marginTop: SPACING.sm,
+    padding: SPACING.xs,
+    borderWidth: 1,
+    borderColor: COLORS.zinc700,
+  },
+  styleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    gap: SPACING.sm,
+  },
+  styleOptionText: {
+    flex: 1,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textSecondary,
+  },
+  // Style-specific decorations
+  geometricShape: {
+    position: 'absolute',
+  },
+  triangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 25,
+    borderRightWidth: 25,
+    borderBottomWidth: 45,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    opacity: 0.6,
+  },
+  diamond: {
+    width: 30,
+    height: 30,
+    transform: [{ rotate: '45deg' }],
+    opacity: 0.5,
+  },
+  hexLine: {
+    width: 40,
+    height: 3,
+    opacity: 0.6,
+  },
+  wave: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 30,
+    borderRadius: 100,
+  },
+  minimalLine: {
+    position: 'absolute',
+    height: 2,
+    left: 15,
+    borderRadius: 1,
+  },
+  neonGlow: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    opacity: 0.4,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 15,
+  },
+  neonLine: {
+    position: 'absolute',
+    left: '10%',
+    right: '10%',
+    height: 2,
+    opacity: 0.6,
+  },
+  vintageBorder: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    right: 8,
+    bottom: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
+  },
+  vintageCorner: {
+    position: 'absolute',
+    width: 15,
+    height: 15,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
 });
 

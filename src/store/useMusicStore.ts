@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import axiosInstance from '../api/axios';
+import axiosInstance, { uploadWithFetchPut } from '../api/axios';
 import { Song, Album, Stats } from '../types';
 
 // Helper functions matching web app
@@ -78,6 +78,7 @@ interface MusicState {
 
     // Song Actions
     fetchSongs: (page?: number, limit?: number) => Promise<void>;
+    fetchAllSongsForQueue: () => Promise<Song[]>;
     fetchFeaturedSongs: () => Promise<void>;
     fetchMadeForYouSongs: () => Promise<void>;
     fetchTrendingSongs: () => Promise<void>;
@@ -89,6 +90,7 @@ interface MusicState {
     // Album Actions
     fetchAlbums: () => Promise<void>;
     fetchAlbumById: (id: string, page?: number, limit?: number) => Promise<Album | null>;
+    fetchFullAlbumForQueue: (id: string) => Promise<Song[]>;
     deleteAlbum: (id: string) => Promise<void>;
     updateAlbum: (id: string, formData: FormData) => Promise<void>;
     assignSongsToAlbum: (albumId: string, songIds: string[]) => Promise<void>;
@@ -184,6 +186,34 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         }
     },
 
+    // Fetch ALL songs for queue (no pagination) - used when starting playback
+    fetchAllSongsForQueue: async () => {
+        try {
+            // Fetch without pagination to get all songs
+            const { data } = await axiosInstance.get<any>('/songs');
+
+            let songsData: Song[];
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                songsData = data.songs || [];
+            } else {
+                songsData = data || [];
+            }
+
+            const likedSet = new Set(get().likedSongs.map((song) => song._id));
+            const normalized = withNormalizedAlbums(songsData);
+            const processedSongs = applyLikesToSongs(normalized, likedSet);
+
+            // Update the songs in store as well
+            set({ songs: processedSongs, hasMore: false });
+
+            return processedSongs;
+        } catch (error: any) {
+            console.error('Error fetching all songs for queue:', error);
+            // Return currently loaded songs as fallback
+            return get().songs;
+        }
+    },
+
     // Fetch featured songs - GET /api/songs/featured
     // Note: Does not set isLoading to avoid race conditions when called in parallel
     fetchFeaturedSongs: async () => {
@@ -271,9 +301,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     updateSong: async (id: string, formData: FormData) => {
         set({ isLoading: true, error: null });
         try {
-            const { data } = await axiosInstance.put(`/admin/songs/${id}`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
+            const data = await uploadWithFetchPut(`/admin/songs/${id}`, formData);
             const updatedSong = data.song as Song;
             const likedSet = new Set(get().likedSongs.map((song) => song._id));
             const songWithLike = {
@@ -396,6 +424,28 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         }
     },
 
+    // Fetch full album with ALL songs for queue (no pagination) - used when starting playback
+    fetchFullAlbumForQueue: async (id: string) => {
+        try {
+            // Fetch without pagination params to get all songs
+            const { data } = await axiosInstance.get<any>(`/album/${id}`);
+            const likedSet = new Set(get().likedSongs.map((song) => song._id));
+            const songs = applyLikesToSongs(data.songs || [], likedSet);
+
+            // Update current album with all songs
+            set({
+                currentAlbum: { ...data, songs },
+                hasMoreAlbumSongs: false
+            });
+
+            return songs;
+        } catch (error: any) {
+            console.error('Error fetching full album for queue:', error);
+            // Return currently loaded album songs as fallback
+            return get().currentAlbum?.songs || [];
+        }
+    },
+
     // Delete album - DELETE /api/admin/albums/:id
     deleteAlbum: async (id: string) => {
         set({ isLoading: true, error: null });
@@ -422,7 +472,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     updateAlbum: async (id: string, formData: FormData) => {
         set({ isLoading: true, error: null });
         try {
-            const { data } = await axiosInstance.put(`/admin/albums/${id}`, formData);
+            const data = await uploadWithFetchPut(`/admin/albums/${id}`, formData);
             const updatedAlbum = data.album as Album;
             set((state) => ({
                 albums: state.albums.map((album) => (album._id === id ? { ...album, ...updatedAlbum } : album)),

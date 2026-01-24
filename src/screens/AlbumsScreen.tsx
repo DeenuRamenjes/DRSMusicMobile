@@ -58,7 +58,7 @@ const AlbumCard = ({ album, onPress }: { album: Album; onPress: () => void }) =>
 // Album Detail View
 const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) => {
   const { currentSong, isPlaying, playAlbum, pauseSong } = usePlayerStore();
-  const { fetchAlbumById, currentAlbum, isLoading } = useMusicStore();
+  const { fetchAlbumById, fetchFullAlbumForQueue, currentAlbum, isLoading } = useMusicStore();
   const { colors: themeColors } = useThemeStore();
 
   const SONGS_PER_PAGE = 14;
@@ -86,12 +86,26 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
 
   const displayAlbum = currentAlbum || album;
 
-  const handlePlaySong = (index: number) => {
+  const handlePlaySong = async (index: number) => {
     if (!displayAlbum?.songs) return;
-    playAlbum(displayAlbum.songs, index);
+
+    // If there are more songs to load, fetch all songs first
+    if (hasMoreAlbumSongs) {
+      const allSongs = await fetchFullAlbumForQueue(album._id);
+      if (allSongs.length > 0) {
+        // Find the song at the original index in the full list
+        const clickedSong = displayAlbum.songs[index];
+        const fullIndex = allSongs.findIndex(s => s._id === clickedSong._id);
+        playAlbum(allSongs, fullIndex !== -1 ? fullIndex : index);
+      } else {
+        playAlbum(displayAlbum.songs, index);
+      }
+    } else {
+      playAlbum(displayAlbum.songs, index);
+    }
   };
 
-  const handlePlayAlbum = () => {
+  const handlePlayAlbum = async () => {
     if (!displayAlbum?.songs) return;
 
     const currentIndex = displayAlbum.songs.findIndex((song) => song._id === currentSong?._id);
@@ -99,10 +113,21 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
       if (isPlaying) {
         pauseSong();
       } else {
+        // Resume current song, no need to refetch
         playAlbum(displayAlbum.songs, currentIndex);
       }
     } else {
-      playAlbum(displayAlbum.songs, 0);
+      // Starting fresh - fetch all songs for the queue
+      if (hasMoreAlbumSongs) {
+        const allSongs = await fetchFullAlbumForQueue(album._id);
+        if (allSongs.length > 0) {
+          playAlbum(allSongs, 0);
+        } else {
+          playAlbum(displayAlbum.songs, 0);
+        }
+      } else {
+        playAlbum(displayAlbum.songs, 0);
+      }
     }
   };
 
@@ -118,6 +143,12 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
 
   const renderHeader = () => (
     <View style={styles.detailContent}>
+      {/* Background Gradient - scrolls with content */}
+      <LinearGradient
+        colors={[`${themeColors.primary}CC`, 'rgba(0, 0, 0, 0.8)', COLORS.background]}
+        style={styles.headerGradient}
+      />
+
       {/* Album Header */}
       <View style={styles.detailHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -207,12 +238,6 @@ const AlbumDetail = ({ album, onBack }: { album: Album; onBack: () => void }) =>
 
   return (
     <View style={styles.detailContainer}>
-      {/* Background Gradient */}
-      <LinearGradient
-        colors={[`${themeColors.primary}CC`, 'rgba(0, 0, 0, 0.8)', COLORS.background]}
-        style={styles.detailGradient}
-      />
-
       <FlatList
         style={styles.detailScroll}
         data={displayAlbum?.songs || []}
@@ -408,15 +433,16 @@ const styles = StyleSheet.create({
   detailScroll: {
     flex: 1,
   },
-  detailGradient: {
+  detailContent: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  headerGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 150,
-  },
-  detailContent: {
-    position: 'relative',
+    height: 300,
   },
   detailHeader: {
     paddingHorizontal: SPACING.lg,

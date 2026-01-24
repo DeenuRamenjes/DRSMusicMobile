@@ -10,7 +10,7 @@ import { create } from 'zustand';
 export const USE_DEPLOYMENT = true;
 
 // Local Development Configuration
-const LOCAL_IP = '10.45.147.136';
+const LOCAL_IP = '192.168.0.28';
 const LOCAL_PORT = 5000;
 const LOCAL_SERVER_URL = `http://${LOCAL_IP}:${LOCAL_PORT}`;
 

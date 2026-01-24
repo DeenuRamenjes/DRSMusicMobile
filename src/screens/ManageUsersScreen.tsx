@@ -21,7 +21,7 @@ import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useFriendsStore } from '../store/useFriendsStore';
-import axiosInstance from '../api/axios';
+import axiosInstance, { uploadWithFetchPut } from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
 
 const SECURITY_PIN = '1288';
@@ -230,9 +230,7 @@ export const ManageUsersScreen = () => {
         } as any);
       }
 
-      const { data } = await axiosInstance.put(`/admin/users/${editingUser._id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const data = await uploadWithFetchPut(`/admin/users/${editingUser._id}`, formData);
 
       // Update local state
       setUsers(prev => prev.map(u => u._id === editingUser._id ? data.user : u));

@@ -17,7 +17,7 @@ import { pick, types } from '@react-native-documents/picker';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../constants/theme';
 import { useThemeStore } from '../store/useThemeStore';
 import { useMusicStore } from '../store/useMusicStore';
-import axiosInstance from '../api/axios';
+import axiosInstance, { uploadWithFetch } from '../api/axios';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
 
 interface NewAlbum {
@@ -46,16 +46,23 @@ export const CreateAlbumScreen = () => {
     try {
       const result = await pick({
         type: [types.images],
+        copyTo: 'cachesDirectory', // Copy file to cache for reliable upload
       });
       
       if (result && result.length > 0) {
         const file = result[0];
+        console.log('Selected file:', JSON.stringify(file, null, 2));
+        
+        // Use fileCopyUri if available (copied to cache), otherwise use original uri
+        const fileUri = (file as any).fileCopyUri || file.uri;
+        console.log('Using URI for upload:', fileUri);
+        
         setImageFile({
-          uri: file.uri,
+          uri: fileUri,
           name: file.name || 'image.jpg',
           type: file.type || 'image/jpeg',
         });
-        setImagePreview(file.uri);
+        setImagePreview(fileUri);
       }
     } catch (err: any) {
       if (err?.code !== 'DOCUMENT_PICKER_CANCELED') {
@@ -90,23 +97,28 @@ export const CreateAlbumScreen = () => {
       formData.append('artist', newAlbum.artist);
       formData.append('releaseYear', newAlbum.releaseYear);
       
+      console.log('Uploading imageFile:', imageFile);
       formData.append('imageFile', {
         uri: imageFile.uri,
         name: imageFile.name,
         type: imageFile.type,
       } as any);
 
-      await axiosInstance.post('/admin/albums', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      await uploadWithFetch('/admin/albums', formData);
 
       fetchAlbums();
       showSuccess('Success', 'Album created successfully', () => navigation.goBack());
     } catch (error: any) {
       console.error('Error creating album:', error);
-      showError('Error', error.response?.data?.message || 'Failed to create album');
+      let errorMessage = 'Failed to create album';
+      if (error.response?.status === 413) {
+        errorMessage = 'Image is too large. Maximum size is 10MB.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Upload timed out. Please check your connection and try again.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      showError('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
