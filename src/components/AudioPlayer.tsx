@@ -12,6 +12,8 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { useFriendsStore } from '../store/useFriendsStore';
 import { useEqualizerStore } from '../store/useEqualizerStore';
 import { getFullAudioUrl, getFullImageUrl } from '../config';
+import { useOfflineMusicStore } from '../store/useOfflineMusicStore';
+import { parseDuration } from '../utils/duration';
 
 // Track if TrackPlayer is initialized
 let isTrackPlayerInitialized = false;
@@ -179,6 +181,25 @@ export const AudioPlayer = () => {
         return () => clearInterval(interval);
     }, [isPlaying, addListeningTime]);
 
+    // Automatic Song Caching - cache song when it starts playing
+    useEffect(() => {
+        if (!currentSong || !audioUrl || !isPlaying) return;
+
+        // Only cache if it's a remote URL and not already downloaded
+        if (audioUrl.startsWith('http')) {
+            const { isDownloaded, downloadSong } = useOfflineMusicStore.getState();
+
+            if (!isDownloaded(currentSong._id)) {
+                downloadSong(currentSong, audioUrl, true).then((success) => {
+                    if (success) {
+                    }
+                }).catch(() => {
+                    // Silently fail, we'll try next time or just stream
+                });
+            }
+        }
+    }, [currentSong?._id, audioUrl, isPlaying]);
+
     // Crossfade effect - fade out current song near the end
     const CROSSFADE_DURATION = 3; // seconds before end to start crossfade
     useEffect(() => {
@@ -254,7 +275,7 @@ export const AudioPlayer = () => {
                     artwork: currentSong.imageUrl
                         ? getFullImageUrl(currentSong.imageUrl)
                         : undefined,
-                    duration: currentSong.duration || 0,
+                    duration: parseDuration(currentSong.duration),
                 };
 
                 // Use load() instead of reset() + add() to prevent notification from restarting
@@ -286,7 +307,7 @@ export const AudioPlayer = () => {
                         artwork: currentSong.imageUrl
                             ? getFullImageUrl(currentSong.imageUrl)
                             : undefined,
-                        duration: currentSong.duration || 0,
+                        duration: parseDuration(currentSong.duration),
                     });
                     await TrackPlayer.setRepeatMode(RepeatMode.Off);
                     await TrackPlayer.play();

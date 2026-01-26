@@ -42,7 +42,7 @@ interface OfflineMusicState {
     // Actions
     loadDownloadedSongs: () => Promise<void>;
     scanDeviceMusic: () => Promise<void>;
-    downloadSong: (song: Song, audioUrl: string) => Promise<boolean>;
+    downloadSong: (song: Song, audioUrl: string, isSilent?: boolean) => Promise<boolean>;
     deleteSong: (songId: string) => Promise<boolean>;
     isDownloaded: (songId: string) => boolean;
     getLocalPath: (songId: string) => string | null;
@@ -355,7 +355,7 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
         }
     },
 
-    downloadSong: async (song: Song, audioUrl: string): Promise<boolean> => {
+    downloadSong: async (song: Song, audioUrl: string, isSilent: boolean = false): Promise<boolean> => {
         const downloadDir = await ensureDownloadDir();
         const fileName = `${song._id}.mp3`;
         const filePath = `${downloadDir}/${fileName}`;
@@ -366,12 +366,14 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
         }
 
         // Set initial progress
-        set((state) => ({
-            downloadProgress: {
-                ...state.downloadProgress,
-                [song._id]: { songId: song._id, progress: 0, status: 'downloading' },
-            },
-        }));
+        if (!isSilent) {
+            set((state) => ({
+                downloadProgress: {
+                    ...state.downloadProgress,
+                    [song._id]: { songId: song._id, progress: 0, status: 'downloading' },
+                },
+            }));
+        }
 
         try {
 
@@ -379,6 +381,7 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
                 fromUrl: audioUrl,
                 toFile: filePath,
                 progress: (res) => {
+                    if (isSilent) return;
                     const progress = Math.round((res.bytesWritten / res.contentLength) * 100);
                     set((state) => ({
                         downloadProgress: {
@@ -413,12 +416,14 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
                 );
 
                 // Update progress
-                set((state) => ({
-                    downloadProgress: {
-                        ...state.downloadProgress,
-                        [song._id]: { songId: song._id, progress: 100, status: 'completed' },
-                    },
-                }));
+                if (!isSilent) {
+                    set((state) => ({
+                        downloadProgress: {
+                            ...state.downloadProgress,
+                            [song._id]: { songId: song._id, progress: 100, status: 'completed' },
+                        },
+                    }));
+                }
 
                 // Calculate storage
                 await get().calculateStorageUsed();
@@ -434,12 +439,14 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
                 await RNFS.unlink(filePath);
             } catch { }
 
-            set((state) => ({
-                downloadProgress: {
-                    ...state.downloadProgress,
-                    [song._id]: { songId: song._id, progress: 0, status: 'failed' },
-                },
-            }));
+            if (!isSilent) {
+                set((state) => ({
+                    downloadProgress: {
+                        ...state.downloadProgress,
+                        [song._id]: { songId: song._id, progress: 0, status: 'failed' },
+                    },
+                }));
+            }
 
             return false;
         }

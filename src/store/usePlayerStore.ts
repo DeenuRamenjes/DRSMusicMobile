@@ -146,6 +146,17 @@ interface PlayerState {
     setTotalListeningTime: (seconds: number) => void;
 }
 
+const resolveBestAudioUrl = (song: Song) => {
+    if (!song.audioUrl) return { url: '', isLocal: false };
+
+    const { getLocalPath } = require('./useOfflineMusicStore').useOfflineMusicStore.getState();
+    const localPath = getLocalPath(song._id);
+    const url = localPath ? `file://${localPath}` : getFullAudioUrl(song.audioUrl);
+    const isLocal = !!localPath || url.startsWith('file://');
+
+    return { url, isLocal };
+};
+
 export const usePlayerStore = create<PlayerState>((set, get) => ({
     currentSong: null,
     isPlaying: false,
@@ -179,8 +190,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
 
         // Get the audio URL - might be local or remote
-        const audioUrl = getFullAudioUrl(song.audioUrl);
-        const isLocalFile = audioUrl.startsWith('file://');
+        const { url: audioUrl, isLocal: isLocalFile } = resolveBestAudioUrl(song);
 
         // Find the song in the queue
         let songIndex = state.queue.findIndex((s) => s._id === song._id);
@@ -272,7 +282,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
 
         const newQueue = [...songs];
-        const audioUrl = getFullAudioUrl(songToPlay.audioUrl);
+        const { url: audioUrl } = resolveBestAudioUrl(songToPlay);
 
         // Set everything atomically like web app
         set({
@@ -303,9 +313,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         if (currentSong) {
             // If no audio URL, load it
             if (!audioUrl && currentSong.audioUrl) {
+                const { url: newUrl } = resolveBestAudioUrl(currentSong);
                 set({
                     isPlaying: true,
-                    audioUrl: getFullAudioUrl(currentSong.audioUrl)
+                    audioUrl: newUrl
                 });
             } else {
                 set({ isPlaying: true });
@@ -338,15 +349,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
         if (queue.length === 0) return;
 
-        // Handle case when no song is playing yet
         if (currentIndex === -1) {
             const nextSong = queue[0];
+            const { url: nextUrl } = resolveBestAudioUrl(nextSong);
             set({
                 currentSong: nextSong,
                 currentIndex: 0,
                 isPlaying: true,
                 currentTime: 0,
-                audioUrl: getFullAudioUrl(nextSong.audioUrl),
+                audioUrl: nextUrl,
                 shuffleQueue: isShuffle ? buildShuffleQueue(queue, nextSong._id) : shuffleQueue,
             });
             return;
@@ -380,7 +391,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             }
 
             const updatedIndex = queue.findIndex((song) => song._id === nextSong._id);
-
+            const { url: nextUrl } = resolveBestAudioUrl(nextSong);
 
             set({
                 currentSong: nextSong,
@@ -388,7 +399,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
                 currentTime: 0,
                 currentIndex: updatedIndex === -1 ? currentIndex : updatedIndex,
                 shuffleQueue: remainingQueue,
-                audioUrl: getFullAudioUrl(nextSong.audioUrl),
+                audioUrl: nextUrl,
             });
             return;
         }
@@ -408,6 +419,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
         if (!nextSong) return;
 
+        const { url: nextUrl } = resolveBestAudioUrl(nextSong);
 
         set({
             currentSong: nextSong,
@@ -415,7 +427,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             currentTime: 0,
             currentIndex: nextIndex,
             shuffleQueue: isShuffle ? buildShuffleQueue(queue, nextSong._id) : shuffleQueue,
-            audioUrl: getFullAudioUrl(nextSong.audioUrl),
+            audioUrl: nextUrl,
         });
     },
 
@@ -615,9 +627,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
         // If trying to play but no audio URL loaded, load it
         if (isPlaying && !audioUrl && currentSong?.audioUrl) {
+            const song = currentSong; // Use currentSong as the song object
+            if (!song.audioUrl) return;
+
+            // Check if song is available locally
+            const { getLocalPath } = require('./useOfflineMusicStore').useOfflineMusicStore.getState();
+            const localPath = getLocalPath(song._id);
+            const newAudioUrl = localPath ? `file://${localPath}` : getFullAudioUrl(song.audioUrl);
+
             set({
                 isPlaying: true,
-                audioUrl: getFullAudioUrl(currentSong.audioUrl)
+                audioUrl: newAudioUrl
             });
         } else {
             set({ isPlaying });
