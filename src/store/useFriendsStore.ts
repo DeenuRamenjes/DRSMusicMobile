@@ -358,7 +358,7 @@ export const useFriendsStore = create<FriendsState>((set, get) => ({
             // Server expects { userId, activity } object
             socket.emit('update_activity', { userId: currentUserId, activity });
         } else {
-            console.error('[Socket] Failed to emit - socket not connected or userId missing');
+            // Silently skip if not ready - this is common during initial load or reconnections
         }
     },
 

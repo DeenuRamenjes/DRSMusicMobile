@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   FlatList,
   ActivityIndicator,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
@@ -24,6 +25,138 @@ import { formatDuration } from '../utils/duration';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
+
+// Memoized Grid Item
+const SongGridItem = memo(({
+  song,
+  isCurrentSong,
+  isPlaying,
+  onPress,
+  themeColors
+}: {
+  song: Song;
+  isCurrentSong: boolean;
+  isPlaying: boolean;
+  onPress: (song: Song) => void;
+  themeColors: any;
+}) => {
+  return (
+    <TouchableOpacity
+      style={styles.gridCard}
+      onPress={() => onPress(song)}
+      activeOpacity={0.8}
+    >
+      <View style={styles.gridImageContainer}>
+        <Image
+          source={{ uri: getFullImageUrl(song.imageUrl) }}
+          style={styles.gridImage}
+        />
+        {song.isLiked && (
+          <View style={styles.likeBadge}>
+            <Text style={styles.likeBadgeIcon}>❤️</Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={[
+            styles.gridPlayButton,
+            { backgroundColor: themeColors.primary },
+            isCurrentSong && isPlaying && styles.gridPlayButtonActive,
+          ]}
+          onPress={() => onPress(song)}
+        >
+          <Icon
+            name={isCurrentSong && isPlaying ? 'pause' : 'play'}
+            size={16}
+            color="#fff"
+            style={!(isCurrentSong && isPlaying) && { marginLeft: 2 }}
+          />
+        </TouchableOpacity>
+        {isCurrentSong && (
+          <View style={styles.activeIndicator}>
+            <View style={[styles.bar, { height: 16, backgroundColor: themeColors.primary }]} />
+            <View style={[styles.bar, { height: 12, backgroundColor: themeColors.primary }]} />
+            <View style={[styles.bar, { height: 20, backgroundColor: themeColors.primary }]} />
+          </View>
+        )}
+      </View>
+      <Text
+        style={[styles.gridTitle, isCurrentSong && { color: themeColors.primary }]}
+        numberOfLines={1}
+      >
+        {song.title}
+      </Text>
+      <Text style={styles.gridArtist} numberOfLines={1}>
+        {song.artist}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+// Memoized List Item
+const SongListItem = memo(({
+  song,
+  index,
+  isCurrentSong,
+  isPlaying,
+  onPress,
+  themeColors,
+  themeDimensions,
+  themeSpacing
+}: {
+  song: Song;
+  index: number;
+  isCurrentSong: boolean;
+  isPlaying: boolean;
+  onPress: (song: Song) => void;
+  themeColors: any;
+  themeDimensions: any;
+  themeSpacing: any;
+}) => {
+  return (
+    <TouchableOpacity
+      style={[styles.listItem, { height: themeDimensions.songCardHeight, paddingVertical: themeSpacing.sm }]}
+      onPress={() => onPress(song)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.listNumber}>
+        {isCurrentSong && isPlaying ? (
+          <View style={styles.playingIndicator}>
+            <View style={[styles.playingBar, { height: 12, backgroundColor: themeColors.primary }]} />
+            <View style={[styles.playingBar, { height: 8, backgroundColor: themeColors.primary }]} />
+            <View style={[styles.playingBar, { height: 12, backgroundColor: themeColors.primary }]} />
+          </View>
+        ) : (
+          <Text style={styles.listNumberText}>{index + 1}</Text>
+        )}
+      </View>
+
+      <View style={styles.listSongInfo}>
+        <View style={[styles.listImageContainer, { width: themeDimensions.listImageSize, height: themeDimensions.listImageSize }]}>
+          <Image
+            source={{ uri: getFullImageUrl(song.imageUrl) }}
+            style={[styles.listImage, { width: themeDimensions.listImageSize, height: themeDimensions.listImageSize }]}
+          />
+          {song.isLiked && (
+            <Text style={styles.listLikeIcon}>❤️</Text>
+          )}
+        </View>
+        <View style={styles.listTextContainer}>
+          <Text
+            style={[styles.listTitle, isCurrentSong && { color: themeColors.primary }]}
+            numberOfLines={1}
+          >
+            {song.title}
+          </Text>
+          <Text style={styles.listArtistMobile} numberOfLines={1}>
+            {song.artist}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.listDuration}>{formatDuration(song.duration)}</Text>
+    </TouchableOpacity>
+  );
+});
 
 export const SongsScreen = () => {
   const navigation = useNavigation();
@@ -49,18 +182,17 @@ export const SongsScreen = () => {
       setQueue(downloadedSongs as any);
       setFilteredSongs(downloadedSongs as any);
     } else if (songs.length > 0) {
-      // Always update queue when songs change (including lazy loaded songs)
-      // setQueue already handles preserving current song position
-      setQueue(songs);
+      // NOTE: Removed setQueue(songs) to prevent playback interruptions during lazy loading.
+      // The queue is now only set when the user explicitly triggers playback.
       setFilteredSongs(songs);
     }
   }, [songs, isOfflineMode, downloadedSongs]);
 
-  const handleLoadMore = () => {
+  const handleLoadMore = useCallback(() => {
     if (!isOfflineMode && hasMore && !isLoading && !isFetchingMore) {
       fetchSongs(currentPage + 1, SONGS_PER_PAGE);
     }
-  };
+  }, [isOfflineMode, hasMore, isLoading, isFetchingMore, currentPage, fetchSongs]);
 
   const renderFooter = () => {
     if (!isFetchingMore) return null;
@@ -71,7 +203,7 @@ export const SongsScreen = () => {
     );
   };
 
-  const handlePlayPause = async (song: Song) => {
+  const handlePlayPause = useCallback(async (song: Song) => {
     if (currentSong?._id === song._id) {
       if (isPlaying) {
         pauseSong();
@@ -97,119 +229,32 @@ export const SongsScreen = () => {
         playAlbum(allSongs as Song[], Math.max(0, songIndex));
       }
     }
-  };
+  }, [currentSong, isPlaying, playSong, pauseSong, isOfflineMode, hasMore, fetchAllSongsForQueue, playAlbum, songs, downloadedSongs]);
 
   // Grid View Item
-  const renderGridItem = ({ item: song }: { item: Song }) => {
-    const isCurrentSong = currentSong?._id === song._id;
-
-    return (
-      <TouchableOpacity
-        style={styles.gridCard}
-        onPress={() => handlePlayPause(song)}
-        activeOpacity={0.8}
-      >
-        <View style={styles.gridImageContainer}>
-          <Image
-            source={{ uri: getFullImageUrl(song.imageUrl) }}
-            style={styles.gridImage}
-          />
-          {/* Like Badge */}
-          {song.isLiked && (
-            <View style={styles.likeBadge}>
-              <Text style={styles.likeBadgeIcon}>❤️</Text>
-            </View>
-          )}
-          {/* Play Button */}
-          <TouchableOpacity
-            style={[
-              styles.gridPlayButton,
-              { backgroundColor: themeColors.primary },
-              isCurrentSong && isPlaying && styles.gridPlayButtonActive,
-            ]}
-            onPress={() => handlePlayPause(song)}
-          >
-            <Icon
-              name={isCurrentSong && isPlaying ? 'pause' : 'play'}
-              size={16}
-              color="#fff"
-              style={!(isCurrentSong && isPlaying) && { marginLeft: 2 }}
-            />
-          </TouchableOpacity>
-          {/* Active indicator */}
-          {isCurrentSong && (
-            <View style={styles.activeIndicator}>
-              <View style={[styles.bar, { height: 16, backgroundColor: themeColors.primary }]} />
-              <View style={[styles.bar, { height: 12, backgroundColor: themeColors.primary }]} />
-              <View style={[styles.bar, { height: 20, backgroundColor: themeColors.primary }]} />
-            </View>
-          )}
-        </View>
-        <Text
-          style={[styles.gridTitle, isCurrentSong && { color: themeColors.primary }]}
-          numberOfLines={1}
-        >
-          {song.title}
-        </Text>
-        <Text style={styles.gridArtist} numberOfLines={1}>
-          {song.artist}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+  const renderGridItem = useCallback(({ item: song }: { item: Song }) => (
+    <SongGridItem
+      song={song}
+      isCurrentSong={currentSong?._id === song._id}
+      isPlaying={isPlaying}
+      onPress={handlePlayPause}
+      themeColors={themeColors}
+    />
+  ), [currentSong?._id, isPlaying, handlePlayPause, themeColors]);
 
   // List View Item
-  const renderListItem = ({ item: song, index }: { item: Song; index: number }) => {
-    const isCurrentSong = currentSong?._id === song._id;
-
-    return (
-      <TouchableOpacity
-        style={[styles.listItem, { height: themeDimensions.songCardHeight, paddingVertical: themeSpacing.sm }]}
-        onPress={() => handlePlayPause(song)}
-        activeOpacity={0.7}
-      >
-        {/* Number / Play indicator */}
-        <View style={styles.listNumber}>
-          {isCurrentSong && isPlaying ? (
-            <View style={styles.playingIndicator}>
-              <View style={[styles.playingBar, { height: 12, backgroundColor: themeColors.primary }]} />
-              <View style={[styles.playingBar, { height: 8, backgroundColor: themeColors.primary }]} />
-              <View style={[styles.playingBar, { height: 12, backgroundColor: themeColors.primary }]} />
-            </View>
-          ) : (
-            <Text style={styles.listNumberText}>{index + 1}</Text>
-          )}
-        </View>
-
-        {/* Song Info */}
-        <View style={styles.listSongInfo}>
-          <View style={[styles.listImageContainer, { width: themeDimensions.listImageSize, height: themeDimensions.listImageSize }]}>
-            <Image
-              source={{ uri: getFullImageUrl(song.imageUrl) }}
-              style={[styles.listImage, { width: themeDimensions.listImageSize, height: themeDimensions.listImageSize }]}
-            />
-            {song.isLiked && (
-              <Text style={styles.listLikeIcon}>❤️</Text>
-            )}
-          </View>
-          <View style={styles.listTextContainer}>
-            <Text
-              style={[styles.listTitle, isCurrentSong && { color: themeColors.primary }]}
-              numberOfLines={1}
-            >
-              {song.title}
-            </Text>
-            <Text style={styles.listArtistMobile} numberOfLines={1}>
-              {song.artist}
-            </Text>
-          </View>
-        </View>
-
-        {/* Duration */}
-        <Text style={styles.listDuration}>{formatDuration(song.duration)}</Text>
-      </TouchableOpacity>
-    );
-  };
+  const renderListItem = useCallback(({ item: song, index }: { item: Song; index: number }) => (
+    <SongListItem
+      song={song}
+      index={index}
+      isCurrentSong={currentSong?._id === song._id}
+      isPlaying={isPlaying}
+      onPress={handlePlayPause}
+      themeColors={themeColors}
+      themeDimensions={themeDimensions}
+      themeSpacing={themeSpacing}
+    />
+  ), [currentSong?._id, isPlaying, handlePlayPause, themeColors, themeDimensions, themeSpacing]);
 
   if (isLoading) {
     return (
@@ -279,6 +324,10 @@ export const SongsScreen = () => {
           onEndReachedThreshold={0.5}
           ListFooterComponent={renderFooter}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+          removeClippedSubviews={Platform.OS === 'android'}
         />
       ) : (
         <View style={styles.listContainer}>
@@ -299,6 +348,13 @@ export const SongsScreen = () => {
             onEndReachedThreshold={0.5}
             ListFooterComponent={renderFooter}
             showsVerticalScrollIndicator={false}
+            initialNumToRender={12}
+            maxToRenderPerBatch={14}
+            windowSize={15}
+            getItemLayout={(data, index) => (
+              { length: themeDimensions.songCardHeight, offset: themeDimensions.songCardHeight * index, index }
+            )}
+            removeClippedSubviews={Platform.OS === 'android'}
           />
         </View>
       )}

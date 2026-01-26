@@ -7,6 +7,7 @@ import TrackPlayer, {
     useTrackPlayerEvents,
     RepeatMode,
     AppKilledPlaybackBehavior,
+    State,
 } from 'react-native-track-player';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useFriendsStore } from '../store/useFriendsStore';
@@ -65,6 +66,9 @@ export const setupTrackPlayer = async (): Promise<boolean> => {
 
         // Set repeat mode to OFF - we handle queue advancement manually
         await TrackPlayer.setRepeatMode(RepeatMode.Off);
+
+        // CRITICAL: Force playback rate to 1.0 to prevent sample rate mismatch issues
+        await TrackPlayer.setRate(1.0);
 
         isTrackPlayerInitialized = true;
 
@@ -135,9 +139,17 @@ export const AudioPlayer = () => {
 
     // CRITICAL: Listen for playback events to handle track ending
     // NOTE: We only listen for queue ended - play/pause state is controlled by the store
+    // CRITICAL: Enforce playback rate on state changes
+    // This catches any edge cases where the rate might have drifted or reset
     useTrackPlayerEvents(
-        [Event.PlaybackQueueEnded],
+        [Event.PlaybackQueueEnded, Event.PlaybackState],
         async (event) => {
+            if (event.type === Event.PlaybackState) {
+                if (event.state === State.Playing) {
+                    await TrackPlayer.setRate(1.0);
+                }
+            }
+
             // When queue ends (no more tracks to play) - trigger next song
             if (event.type === Event.PlaybackQueueEnded) {
                 // Debounce: Only trigger if more than 500ms since last trigger
@@ -252,6 +264,20 @@ export const AudioPlayer = () => {
         }
     }, [currentSong?._id]);
 
+    // NUCLEAR OPTION: Enforce 1.0x speed every 2 seconds while playing
+    // This fixes persistent "chipmunk" issues caused by native thread drift
+    useEffect(() => {
+        if (!isPlaying) return;
+
+        const rateInterval = setInterval(() => {
+            TrackPlayer.setRate(1.0).catch(() => {
+                // Ignore errors if player is not ready
+            });
+        }, 2000);
+
+        return () => clearInterval(rateInterval);
+    }, [isPlaying]);
+
     // Sync current song changes to TrackPlayer
     useEffect(() => {
         const loadTrack = async () => {
@@ -278,12 +304,20 @@ export const AudioPlayer = () => {
                     duration: parseDuration(currentSong.duration),
                 };
 
-                // Use load() instead of reset() + add() to prevent notification from restarting
-                // load() smoothly transitions to the new track
-                await TrackPlayer.load(newTrack);
+                // CRITICAL: Reset player state completely to ensure decoders re-init
+                // This fixes the "chipmunk" (fast playback) issue when switching sample rates
+                // We pause and wait briefly to allow the AudioTrack to fully release
+                await TrackPlayer.pause();
+                await new Promise<void>(resolve => setTimeout(() => resolve(), 50));
+
+                await TrackPlayer.reset();
+                await TrackPlayer.add(newTrack);
 
                 // Ensure repeat is OFF - we handle next track manually
                 await TrackPlayer.setRepeatMode(RepeatMode.Off);
+
+                // CRITICAL: Reset rate to 1.0 for every new track to prevent speed glitches
+                await TrackPlayer.setRate(1.0);
 
                 // Play the track
                 await TrackPlayer.play();

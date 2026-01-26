@@ -154,6 +154,12 @@ const resolveBestAudioUrl = (song: Song) => {
     const url = localPath ? `file://${localPath}` : getFullAudioUrl(song.audioUrl);
     const isLocal = !!localPath || url.startsWith('file://');
 
+    if (localPath) {
+        console.log(`[Player] Using cached file: ${url} (for: ${song.title})`);
+    } else {
+        console.log(`[Player] Using remote URL: ${url} (for: ${song.title})`);
+    }
+
     return { url, isLocal };
 };
 
@@ -195,15 +201,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         // Find the song in the queue
         let songIndex = state.queue.findIndex((s) => s._id === song._id);
 
-        // If song not in queue, add it
+        // If song not in queue, add it and get the new queue/index
+        let finalQueue = state.queue;
         if (songIndex === -1) {
-            // Add song to queue (for both local and remote files)
-            const newQueue = [...state.queue, song];
-            songIndex = newQueue.length - 1;
-            set({ queue: newQueue });
+            finalQueue = [...state.queue, song];
+            songIndex = finalQueue.length - 1;
         }
 
         const updates: Partial<PlayerState> = {
+            queue: finalQueue,
             currentSong: song,
             isPlaying: true,
             currentTime: 0,
@@ -211,7 +217,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             audioUrl: audioUrl,
             duration: parseDuration(song.duration) || 0,
             isLoading: false,
-
         };
 
         // Handle shuffle queue matching web app behavior

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useMemo, useEffect, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ import { getFullImageUrl, getFullAudioUrl } from '../config';
 import { Song } from '../types';
 import { CustomDialog, useDialog } from '../components/CustomDialog';
 import { formatDuration } from '../utils/duration';
+import { PlaybackProgress } from '../components/PlaybackProgress';
 
 import axiosInstance from '../api/axios';
 
@@ -47,6 +48,76 @@ interface ShareUser {
   email?: string;
   image?: string;
 }
+
+// Memoized Queue Item
+const QueueListItem = memo(({
+  item,
+  index,
+  isMenuVisible,
+  onPress,
+  onLongPress,
+  onPlayNext,
+  onRemove
+}: {
+  item: Song;
+  index: number;
+  isMenuVisible: boolean;
+  onPress: (song: Song) => void;
+  onLongPress: (id: string) => void;
+  onPlayNext: (id: string) => void;
+  onRemove: (id: string) => void;
+}) => {
+  return (
+    <View style={styles.queueItemWrapper}>
+      <TouchableOpacity
+        style={styles.queueItem}
+        onPress={() => onPress(item)}
+        onLongPress={() => onLongPress(item._id)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.queueItemIndex}>
+          <Text style={styles.queueItemIndexText}>{index + 1}</Text>
+        </View>
+        <Image
+          source={{ uri: getFullImageUrl(item.imageUrl) }}
+          style={styles.queueItemImage}
+        />
+        <View style={styles.queueItemInfo}>
+          <Text style={styles.queueItemTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.queueItemArtist} numberOfLines={1}>{item.artist}</Text>
+        </View>
+        <Text style={styles.queueItemDuration}>{formatDuration(item.duration || 0)}</Text>
+        <TouchableOpacity
+          style={styles.queueItemMenuButton}
+          onPress={() => onLongPress(item._id)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Icon name="more-vertical" size={18} color={COLORS.textMuted} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+
+      {/* Dropdown Menu */}
+      {isMenuVisible && (
+        <View style={styles.queueItemMenu}>
+          <TouchableOpacity
+            style={styles.queueItemMenuOption}
+            onPress={() => onPlayNext(item._id)}
+          >
+            <Icon name="skip-forward" size={16} color={COLORS.textPrimary} />
+            <Text style={styles.queueItemMenuText}>Play Next</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.queueItemMenuOption}
+            onPress={() => onRemove(item._id)}
+          >
+            <Icon name="trash-2" size={16} color={COLORS.error} />
+            <Text style={[styles.queueItemMenuText, { color: COLORS.error }]}>Remove from Queue</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+});
 
 export const SongDetailScreen = () => {
   const navigation = useNavigation();
@@ -65,8 +136,6 @@ export const SongDetailScreen = () => {
   const {
     currentSong,
     isPlaying,
-    currentTime,
-    duration,
     togglePlayPause,
     playNext,
     playPrevious,
@@ -74,7 +143,6 @@ export const SongDetailScreen = () => {
     isLooping,
     toggleShuffle,
     toggleLoop,
-    seekTo,
     queue,
     shuffleQueue,
     currentIndex,
@@ -92,8 +160,27 @@ export const SongDetailScreen = () => {
   const { isDownloaded, downloadSong, deleteSong, downloadProgress } = useOfflineMusicStore();
   const { user: currentUser } = useAuthStore();
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   const isSongLiked = currentSong ? likedSongs.some(s => s._id === currentSong._id) : false;
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      (navigation as any).reset({
+        index: 0,
+        routes: [{ name: 'MainLayout' }],
+      });
+    }
+  };
+
+  const handleToggleLike = async () => {
+    if (!currentSong) return;
+    if (isSongLiked) {
+      await unlikeSong(currentSong._id);
+    } else {
+      await likeSong(currentSong._id);
+    }
+  };
 
   // Calculate upcoming queue based on shuffle/loop mode (matching web app logic exactly)
   const upcomingQueue = useMemo(() => {
@@ -116,52 +203,14 @@ export const SongDetailScreen = () => {
     return [...afterCurrent, ...beforeCurrent];
   }, [queue, currentIndex, isShuffle, isLooping, shuffleQueue, currentSong?._id]);
 
-  // Ref for progress bar to measure its layout
-  const progressBarRef = useRef<View>(null);
-  const progressBarLayout = useRef<LayoutRectangle | null>(null);
-
-
-  // Handle seek when user taps on progress bar
-  const handleSeek = (event: GestureResponderEvent) => {
-    if (!progressBarLayout.current || duration <= 0) return;
-
-    const { locationX } = event.nativeEvent;
-    const barWidth = progressBarLayout.current.width;
-
-    const seekPercent = Math.max(0, Math.min(1, locationX / barWidth));
-    const seekPosition = seekPercent * duration;
-
-    seekTo(seekPosition);
-  };
-
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      (navigation as any).reset({
-        index: 0,
-        routes: [{ name: 'MainLayout' }],
-      });
-    }
-  };
-
-  const handleToggleLike = async () => {
-    if (!currentSong) return;
-    if (isSongLiked) {
-      await unlikeSong(currentSong._id);
-    } else {
-      await likeSong(currentSong._id);
-    }
-  };
-
-  const handlePlayFromQueue = (song: Song) => {
+  const handlePlayFromQueue = useCallback((song: Song) => {
     playSong(song);
     setIsQueueOpen(false);
     setQueueItemMenuId(null);
-  };
+  }, [playSong]);
 
   // External share (OS share sheet)
-  const handleExternalShare = async () => {
+  const handleExternalShare = useCallback(async () => {
     if (!currentSong) return;
     try {
       const webAppUrl = 'https://drs-music-player.onrender.com';
@@ -176,10 +225,10 @@ export const SongDetailScreen = () => {
       console.error('Error sharing:', error);
     }
     setIsMenuOpen(false);
-  };
+  }, [currentSong]);
 
   // Open in-app share modal (share with users)
-  const handleShare = async () => {
+  const handleShare = useCallback(async () => {
     if (!currentSong) return;
     setIsMenuOpen(false);
     setIsShareUsersOpen(true);
@@ -199,10 +248,10 @@ export const SongDetailScreen = () => {
     } finally {
       setIsLoadingUsers(false);
     }
-  };
+  }, [currentSong, currentUser, showError]);
 
   // Send song to a specific user
-  const handleSendToUser = async (user: ShareUser) => {
+  const handleSendToUser = useCallback(async (user: ShareUser) => {
     if (!currentSong) return;
 
     setIsSending(user._id);
@@ -229,7 +278,7 @@ export const SongDetailScreen = () => {
     } finally {
       setIsSending(null);
     }
-  };
+  }, [currentSong, showSuccess, showError]);
 
   const handleViewLyrics = () => {
     setIsMenuOpen(false);
@@ -375,74 +424,31 @@ export const SongDetailScreen = () => {
 
   const imageUri = getFullImageUrl(currentSong.imageUrl);
 
-  const renderQueueItem = ({ item, index }: { item: Song; index: number }) => {
-    const isMenuVisible = queueItemMenuId === item._id;
+  const handlePlayNextInQueue = useCallback((id: string) => {
+    moveToNextInQueue(id);
+    setQueueItemMenuId(null);
+  }, [moveToNextInQueue]);
 
-    const handlePlayNextPress = () => {
-      moveToNextInQueue(item._id);
-      setQueueItemMenuId(null);
-    };
+  const handleRemoveFromQueue = useCallback((id: string) => {
+    removeFromQueue(id);
+    setQueueItemMenuId(null);
+  }, [removeFromQueue]);
 
-    const handleRemovePress = () => {
-      removeFromQueue(item._id);
-      setQueueItemMenuId(null);
-    };
+  const handleToggleQueueItemMenu = useCallback((id: string) => {
+    setQueueItemMenuId(prev => prev === id ? null : id);
+  }, []);
 
-    return (
-      <View style={styles.queueItemWrapper}>
-        <TouchableOpacity
-          style={styles.queueItem}
-          onPress={() => {
-            setQueueItemMenuId(null); // Close any open menu
-            handlePlayFromQueue(item);
-          }}
-          onLongPress={() => setQueueItemMenuId(isMenuVisible ? null : item._id)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.queueItemIndex}>
-            <Text style={styles.queueItemIndexText}>{index + 1}</Text>
-          </View>
-          <Image
-            source={{ uri: getFullImageUrl(item.imageUrl) }}
-            style={styles.queueItemImage}
-          />
-          <View style={styles.queueItemInfo}>
-            <Text style={styles.queueItemTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.queueItemArtist} numberOfLines={1}>{item.artist}</Text>
-          </View>
-          <Text style={styles.queueItemDuration}>{formatDuration(item.duration || 0)}</Text>
-          <TouchableOpacity
-
-            style={styles.queueItemMenuButton}
-            onPress={() => setQueueItemMenuId(isMenuVisible ? null : item._id)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Icon name="more-vertical" size={18} color={COLORS.textMuted} />
-          </TouchableOpacity>
-        </TouchableOpacity>
-
-        {/* Dropdown Menu */}
-        {isMenuVisible && (
-          <View style={styles.queueItemMenu}>
-            <TouchableOpacity
-              style={styles.queueItemMenuOption}
-              onPress={handlePlayNextPress}
-            >
-              <Icon name="skip-forward" size={16} color={COLORS.textPrimary} />
-              <Text style={styles.queueItemMenuText}>Play Next</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.queueItemMenuOption}
-              onPress={handleRemovePress}
-            >
-              <Icon name="trash-2" size={16} color={COLORS.error} />
-              <Text style={[styles.queueItemMenuText, { color: COLORS.error }]}>Remove from Queue</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    );
-  };
+  const renderQueueItem = useCallback(({ item, index }: { item: Song; index: number }) => (
+    <QueueListItem
+      item={item}
+      index={index}
+      isMenuVisible={queueItemMenuId === item._id}
+      onPress={handlePlayFromQueue}
+      onLongPress={handleToggleQueueItemMenu}
+      onPlayNext={handlePlayNextInQueue}
+      onRemove={handleRemoveFromQueue}
+    />
+  ), [queueItemMenuId, handlePlayFromQueue, handleToggleQueueItemMenu, handlePlayNextInQueue, handleRemoveFromQueue]);
 
   return (
     <View style={styles.container}>
@@ -501,25 +507,7 @@ export const SongDetailScreen = () => {
           </View>
 
           {/* Progress Bar */}
-          <View style={styles.progressSection}>
-            <TouchableOpacity
-              ref={progressBarRef}
-              style={styles.progressBar}
-              onLayout={(event) => {
-                progressBarLayout.current = event.nativeEvent.layout;
-              }}
-              onPress={handleSeek}
-              activeOpacity={0.9}
-              hitSlop={{ top: 20, bottom: 20, left: 0, right: 0 }}
-            >
-              <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
-              <View style={[styles.progressHandle, { left: `${progressPercent}%`, backgroundColor: themeColors.primary }]} />
-            </TouchableOpacity>
-            <View style={styles.timeContainer}>
-              <Text style={styles.timeText}>{formatDuration(currentTime)}</Text>
-              <Text style={styles.timeText}>{formatDuration(duration)}</Text>
-            </View>
-          </View>
+          <PlaybackProgress />
 
 
           {/* Main Controls */}
@@ -814,6 +802,10 @@ export const SongDetailScreen = () => {
                   contentContainerStyle={styles.queueListContent}
                   showsVerticalScrollIndicator={false}
                   onScrollBeginDrag={() => setQueueItemMenuId(null)}
+                  initialNumToRender={10}
+                  maxToRenderPerBatch={10}
+                  windowSize={11}
+                  removeClippedSubviews={Platform.OS === 'android'}
                 />
               ) : (
                 <View style={styles.emptyQueue}>

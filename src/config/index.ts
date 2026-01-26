@@ -7,7 +7,7 @@ import { create } from 'zustand';
 
 // Set to TRUE for production (deployed backend servers)
 // Set to FALSE for local development (uses local server directly)
-export const USE_DEPLOYMENT = false;
+export const USE_DEPLOYMENT = true;
 
 // Local Development Configuration
 const LOCAL_IP = '192.168.1.40';
@@ -34,9 +34,9 @@ export const BACKEND_SERVERS: BackendServer[] = [
         description: 'Primary production server',
     },
     {
-        id: 'railway',
-        name: 'Server 2 (Railway)',
-        url: 'https://drsmusic-backend-production.up.railway.app',
+        id: 'render',
+        name: 'Server 2 (Render)',
+        url: 'https://drs-music-backend.onrender.com',
         description: 'Backup production server',
     },
 ];
