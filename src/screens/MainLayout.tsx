@@ -10,6 +10,8 @@ import {
   ScrollView,
   Image,
   Pressable,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import axiosInstance from '../api/axios';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -322,7 +324,50 @@ export const MainLayout = () => {
   const { isOfflineMode, setOfflineMode } = useOfflineMusicStore();
   const { colors: themeColors } = useThemeStore();
   const { initSocket, disconnectSocket, unreadCounts } = useFriendsStore();
+  const { syncAppUsage } = useAuthStore();
   const slideAnim = useState(new Animated.Value(-300))[0];
+
+  // App usage tracking
+  const sessionStartTimeRef = useRef<number>(Date.now());
+  const pendingTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    const handleSync = async () => {
+      const now = Date.now();
+      const elapsed = Math.floor((now - sessionStartTimeRef.current) / 1000);
+      const totalToSync = elapsed + pendingTimeRef.current;
+
+      if (totalToSync > 0) {
+        try {
+          await syncAppUsage(totalToSync);
+          pendingTimeRef.current = 0;
+          sessionStartTimeRef.current = Date.now();
+        } catch (error) {
+          // If failed, add to pending for next try
+          pendingTimeRef.current += elapsed;
+          sessionStartTimeRef.current = Date.now();
+        }
+      }
+    };
+
+    // Sync every minute
+    const syncInterval = setInterval(handleSync, 60000);
+
+    // Sync on app state change (backgrounding)
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState.match(/inactive|background/)) {
+        handleSync();
+      } else if (nextAppState === 'active') {
+        sessionStartTimeRef.current = Date.now();
+      }
+    });
+
+    return () => {
+      clearInterval(syncInterval);
+      subscription.remove();
+      handleSync(); // Final sync on unmount
+    };
+  }, []);
 
   // Check admin status from API
   useEffect(() => {

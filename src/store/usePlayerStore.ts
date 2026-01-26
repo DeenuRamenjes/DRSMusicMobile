@@ -39,6 +39,41 @@ const syncPlaybackToBackend = async (shuffle?: boolean, loop?: boolean, volume?:
     }, 500);
 };
 
+// Debounce function for syncing listening time to backend
+let listeningTimeSyncTimeout: ReturnType<typeof setTimeout> | null = null;
+let pendingTimeAccumulator = 0;
+
+const syncListeningTimeToBackend = (additionalTime: number) => {
+    // Import store inside to avoid circular dependencies if any (though unlikely here)
+    const { useAuthStore } = require('./useAuthStore');
+
+    pendingTimeAccumulator += additionalTime;
+
+    if (listeningTimeSyncTimeout) {
+        clearTimeout(listeningTimeSyncTimeout);
+    }
+
+    // Sync if we have accumulated significant time (e.g. 1 minute) or after a 5 second idle period
+    const shouldSyncNow = pendingTimeAccumulator >= 60;
+    const syncDelay = shouldSyncNow ? 0 : 5000;
+
+    listeningTimeSyncTimeout = setTimeout(async () => {
+        const timeToSync = pendingTimeAccumulator;
+        if (timeToSync <= 0) return;
+
+        try {
+            const authStore = useAuthStore.getState();
+            if (authStore.isAuthenticated) {
+                await authStore.syncListeningTime(timeToSync);
+                pendingTimeAccumulator = 0; // Only reset on success or if we decide to drop it
+            }
+        } catch (error) {
+            console.error('Failed to sync listening time to backend:', error);
+            // We keep the pending accumulator to retry next time
+        }
+    }, syncDelay);
+};
+
 // Persist last song to AsyncStorage
 const saveLastSong = async (song: Song) => {
     try {
@@ -108,6 +143,7 @@ interface PlayerState {
     cleanup: () => void;
     addListeningTime: (seconds: number) => void;
     loadListeningTime: () => Promise<void>;
+    setTotalListeningTime: (seconds: number) => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -639,6 +675,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         // Persist to storage
         try {
             await AsyncStorage.setItem(LISTENING_TIME_KEY, newTotal.toString());
+
+            // Sync to backend
+            syncListeningTimeToBackend(seconds);
         } catch (error) {
             console.error('Failed to save listening time:', error);
         }
@@ -653,6 +692,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         } catch (error) {
             console.error('Failed to load listening time:', error);
         }
+    },
+
+    setTotalListeningTime: (seconds: number) => {
+        set({ totalListeningTime: seconds });
+        AsyncStorage.setItem(LISTENING_TIME_KEY, seconds.toString()).catch(() => { });
     },
 }));
 

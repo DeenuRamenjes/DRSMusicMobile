@@ -69,6 +69,8 @@ interface AuthState {
     login: (userData: any, token: string) => void;
     logout: () => Promise<void>;
     checkAuth: () => Promise<void>;
+    syncAppUsage: (additionalTime: number) => Promise<void>;
+    syncListeningTime: (additionalTime: number) => Promise<void>;
     setIsLoading: (loading: boolean) => void;
     reset: () => void;
 }
@@ -90,6 +92,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             emailAddress: userData.emailAddress || userData.email ||
                 (userData.emailAddresses?.[0]?.emailAddress) || '',
             imageUrl: userData.imageUrl || userData.image || '',
+            totalAppUseTime: userData.totalAppUseTime || userData.stats?.totalAppUseTime || 0,
+            totalListeningTime: userData.totalListeningTime || userData.stats?.totalListeningTime || 0,
             createdAt: userData.createdAt || new Date().toISOString(),
         };
 
@@ -115,7 +119,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             });
             await GoogleSignin.signOut();
         } catch (error) {
-            console.log('Google sign out error (may not be signed in):', error);
+            console.error('Google sign out error (may not be signed in):', error);
         }
 
         // Clear persisted data
@@ -164,6 +168,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                             username: userData.username || storedUser.username,
                             emailAddress: userData.emailAddress || userData.email || storedUser.emailAddress,
                             imageUrl: userData.imageUrl || userData.image || storedUser.imageUrl,
+                            totalAppUseTime: userData.totalAppUseTime || userData.stats?.totalAppUseTime || storedUser.totalAppUseTime || 0,
+                            totalListeningTime: userData.totalListeningTime || userData.stats?.totalListeningTime || storedUser.totalListeningTime || 0,
                             createdAt: userData.createdAt || storedUser.createdAt,
                         };
 
@@ -189,6 +195,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     username: userData.username || '',
                     emailAddress: userData.emailAddress || userData.email || '',
                     imageUrl: userData.imageUrl || userData.image || '',
+                    totalAppUseTime: userData.totalAppUseTime || userData.stats?.totalAppUseTime || 0,
+                    totalListeningTime: userData.totalListeningTime || userData.stats?.totalListeningTime || 0,
                     createdAt: userData.createdAt,
                 };
 
@@ -230,6 +238,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 user: null,
                 error: error.response?.data?.message || 'Authentication failed',
             });
+        }
+    },
+
+    syncAppUsage: async (additionalTime: number) => {
+        if (!get().isAuthenticated || additionalTime <= 0) return;
+
+        try {
+            const response = await axiosInstance.post('/users/me/app-time', { additionalTime });
+            if (response.data?.success && get().user) {
+                set((state) => ({
+                    user: state.user ? {
+                        ...state.user,
+                        totalAppUseTime: response.data.totalAppUseTime
+                    } : null
+                }));
+                // Update persisted data
+                const updatedUser = { ...get().user!, totalAppUseTime: response.data.totalAppUseTime };
+                setUserData(updatedUser);
+            }
+        } catch (error) {
+            console.error('Failed to sync app usage time:', error);
+        }
+    },
+
+    syncListeningTime: async (additionalTime: number) => {
+        if (!get().isAuthenticated || additionalTime <= 0) return;
+
+        try {
+            const response = await axiosInstance.post('/users/me/listening-time', { additionalTime });
+            if (response.data?.success && get().user) {
+                set((state) => ({
+                    user: state.user ? {
+                        ...state.user,
+                        totalListeningTime: response.data.totalListeningTime
+                    } : null
+                }));
+                // Update persisted data
+                const updatedUser = { ...get().user!, totalListeningTime: response.data.totalListeningTime };
+                setUserData(updatedUser);
+            }
+        } catch (error) {
+            console.error('Failed to sync listening time:', error);
         }
     },
 

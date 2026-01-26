@@ -211,6 +211,12 @@ export const AdminScreen = () => {
 
   const adminMenuItems = [
     {
+      icon: 'upload',
+      label: 'Upload Music',
+      description: 'Upload new songs to the library',
+      onPress: () => (navigation as any).navigate('UploadSong'),
+    },
+    {
       icon: 'music',
       label: 'Manage Songs',
       description: 'Add, edit, or remove songs',
@@ -235,12 +241,6 @@ export const AdminScreen = () => {
       description: 'Manage admin privileges',
       onPress: () => (navigation as any).navigate('AdminAccess'),
     }] : []),
-    {
-      icon: 'upload',
-      label: 'Upload Music',
-      description: 'Upload new songs to the library',
-      onPress: () => (navigation as any).navigate('UploadSong'),
-    },
     {
       icon: 'bell',
       label: 'Send Notification',

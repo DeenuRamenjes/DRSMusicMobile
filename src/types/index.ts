@@ -99,6 +99,8 @@ export interface User {
     image?: string;
     likedSongs: string[];
     lastSeen?: string;
+    totalAppUseTime?: number;
+    totalListeningTime?: number;
     createdAt?: string;
     settings: UserSettings;
 }
@@ -112,6 +114,8 @@ export interface AuthUser {
     username?: string;
     emailAddress?: string;
     imageUrl?: string;
+    totalAppUseTime?: number;
+    totalListeningTime?: number;
     createdAt?: string;
 }
 

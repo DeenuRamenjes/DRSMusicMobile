@@ -38,8 +38,14 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
   const [refreshing, setRefreshing] = useState(false);
   const [, setRefreshTrigger] = useState(0);
 
-  // Handle user press - navigate to chat
+  // Handle user press - navigate to profile
   const handleUserPress = (user: User) => {
+    onClose?.(); // Close the modal first
+    const userId = user.googleId || user._id || (user as any).id;
+    (navigation as any).navigate('Profile', { userId, userData: user });
+  };
+
+  const handleChatPress = (user: User) => {
     onClose?.(); // Close the modal first
     (navigation as any).navigate('Chat', { user });
   };
@@ -95,8 +101,8 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
       : ['', ''];
 
     return (
-      <TouchableOpacity 
-        key={userData._id} 
+      <TouchableOpacity
+        key={userData._id}
         style={styles.userItem}
         onPress={() => handleUserPress(userData)}
         activeOpacity={0.7}
@@ -159,12 +165,12 @@ export const FriendsActivity = ({ onClose }: FriendsActivityProps) => {
         </View>
 
         {/* Message Icon */}
-        <TouchableOpacity 
+        {/* <TouchableOpacity
           style={styles.messageButton}
-          onPress={() => handleUserPress(userData)}
+          onPress={() => handleChatPress(userData)}
         >
           <Icon name="message-circle" size={20} color={themeColors.primary} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </TouchableOpacity>
     );
   };

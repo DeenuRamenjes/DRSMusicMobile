@@ -18,6 +18,7 @@ import { CreateAlbumScreen } from '../screens/CreateAlbumScreen';
 import { EditAlbumScreen } from '../screens/EditAlbumScreen';
 import { EditSongScreen } from '../screens/EditSongScreen';
 import { TodoScreen } from '../screens/TodoScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
 import { AdminAccessScreen } from '../screens/AdminAccessScreen';
 import { ConnectionScreen } from '../components/ConnectionScreen';
 import { SplashScreen } from '../components/SplashScreen';
@@ -72,6 +73,50 @@ export const AppNavigator = () => {
 
     init();
   }, []);
+
+  // APP USAGE TRACKING
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let lastAppUsageUpdateTime = Date.now();
+    let pendingAppUsageTime = 0;
+
+    const syncToBackend = async (time: number) => {
+      if (time <= 0) return;
+      try {
+        await useAuthStore.getState().syncAppUsage(time);
+      } catch (e) {
+        // Keep pending time to retry next time
+        pendingAppUsageTime += time;
+      }
+    };
+
+    const interval = setInterval(() => {
+      // Only track if app is active
+      const now = Date.now();
+      const elapsed = Math.floor((now - lastAppUsageUpdateTime) / 1000);
+
+      if (elapsed >= 10) {
+        pendingAppUsageTime += elapsed;
+        lastAppUsageUpdateTime = now;
+
+        // Sync every 60 seconds of accumulated time
+        if (pendingAppUsageTime >= 60) {
+          const timeToSync = pendingAppUsageTime;
+          pendingAppUsageTime = 0;
+          syncToBackend(timeToSync);
+        }
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => {
+      clearInterval(interval);
+      // Final sync attempt
+      if (pendingAppUsageTime > 0) {
+        syncToBackend(pendingAppUsageTime);
+      }
+    };
+  }, [isAuthenticated]);
 
   // Update connection failed state when connection changes
   useEffect(() => {
@@ -274,6 +319,13 @@ export const AppNavigator = () => {
         <Stack.Screen
           name="AdminAccess"
           component={AdminAccessScreen}
+          options={{
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen
+          name="Profile"
+          component={ProfileScreen}
           options={{
             gestureDirection: 'horizontal',
           }}

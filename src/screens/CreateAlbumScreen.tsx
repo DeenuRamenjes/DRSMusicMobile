@@ -31,14 +31,14 @@ export const CreateAlbumScreen = () => {
   const { colors: themeColors } = useThemeStore();
   const { fetchAlbums } = useMusicStore();
   const { dialogState, hideDialog, showSuccess, showError } = useDialog();
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [newAlbum, setNewAlbum] = useState<NewAlbum>({
     title: '',
     artist: '',
     releaseYear: new Date().getFullYear().toString(),
   });
-  
+
   const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -48,15 +48,13 @@ export const CreateAlbumScreen = () => {
         type: [types.images],
         copyTo: 'cachesDirectory', // Copy file to cache for reliable upload
       });
-      
+
       if (result && result.length > 0) {
         const file = result[0];
-        console.log('Selected file:', JSON.stringify(file, null, 2));
-        
+
         // Use fileCopyUri if available (copied to cache), otherwise use original uri
         const fileUri = (file as any).fileCopyUri || file.uri;
-        console.log('Using URI for upload:', fileUri);
-        
+
         setImageFile({
           uri: fileUri,
           name: file.name || 'image.jpg',
@@ -96,8 +94,7 @@ export const CreateAlbumScreen = () => {
       formData.append('title', newAlbum.title);
       formData.append('artist', newAlbum.artist);
       formData.append('releaseYear', newAlbum.releaseYear);
-      
-      console.log('Uploading imageFile:', imageFile);
+
       formData.append('imageFile', {
         uri: imageFile.uri,
         name: imageFile.name,
@@ -112,7 +109,7 @@ export const CreateAlbumScreen = () => {
       console.error('Error creating album:', error);
       let errorMessage = 'Failed to create album';
       if (error.response?.status === 413) {
-        errorMessage = 'Image is too large. Maximum size is 10MB.';
+        errorMessage = 'Image is too large. Maximum size is 30MB.';
       } else if (error.code === 'ECONNABORTED') {
         errorMessage = 'Upload timed out. Please check your connection and try again.';
       } else if (error.response?.data?.message) {
@@ -127,7 +124,7 @@ export const CreateAlbumScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -137,14 +134,14 @@ export const CreateAlbumScreen = () => {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         {/* Image Upload */}
         <Text style={styles.sectionTitle}>Cover Art</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.imageUploadContainer}
           onPress={selectImageFile}
         >
