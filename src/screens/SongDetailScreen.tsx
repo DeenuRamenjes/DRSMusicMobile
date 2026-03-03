@@ -345,9 +345,10 @@ export const SongDetailScreen = () => {
       const audioUrl = getFullAudioUrl(currentSong.audioUrl);
       const RNFS = require('react-native-fs');
 
-      // Create filename from song title
+      // Create filename from song title and artist
       const sanitizedTitle = currentSong.title.replace(/[/\\?%*:|"<>]/g, '-');
-      const filename = `${sanitizedTitle} - ${currentSong.artist}.mp3`;
+      const sanitizedArtist = currentSong.artist.replace(/[/\\?%*:|"<>]/g, '-');
+      const filename = `${sanitizedTitle} - ${sanitizedArtist}.mp3`;
 
       // Determine download path based on platform
       const downloadDir = Platform.OS === 'android'
