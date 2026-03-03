@@ -232,14 +232,14 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
             if (stored) {
                 const songs: LocalSong[] = JSON.parse(stored);
 
-                // Verify files still exist
-                const validSongs: LocalSong[] = [];
-                for (const song of songs) {
-                    const exists = await RNFS.exists(song.localPath);
-                    if (exists) {
-                        validSongs.push(song);
-                    }
-                }
+                // Verify files still exist concurrently
+                const existenceChecks = await Promise.all(
+                    songs.map(async (song) => {
+                        const exists = await RNFS.exists(song.localPath);
+                        return exists ? song : null;
+                    })
+                );
+                const validSongs = existenceChecks.filter((song): song is LocalSong => song !== null);
 
                 // Update storage if any files were removed
                 if (validSongs.length !== songs.length) {
@@ -509,12 +509,18 @@ export const useOfflineMusicStore = create<OfflineMusicState>((set, get) => ({
 
     clearAllDownloads: async () => {
         try {
-            // Delete all files
-            for (const song of get().downloadedSongs) {
-                if (await RNFS.exists(song.localPath)) {
-                    await RNFS.unlink(song.localPath);
-                }
-            }
+            // Delete all files concurrently
+            await Promise.all(
+                get().downloadedSongs.map(async (song) => {
+                    try {
+                        if (await RNFS.exists(song.localPath)) {
+                            await RNFS.unlink(song.localPath);
+                        }
+                    } catch (err) {
+                        console.error(`Failed to delete song ${song._id}:`, err);
+                    }
+                })
+            );
 
             // Clear storage
             await AsyncStorage.removeItem(STORAGE_KEYS.DOWNLOADED_SONGS);
