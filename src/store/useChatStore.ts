@@ -39,36 +39,21 @@ export const useChatStore = create<ChatState>((set) => ({
     setSelectedUser: (user) => set({ selectedUser: user }),
 
     fetchUsers: async () => {
-        // TODO: Implement API call
+        // Placeholder for fetching users
         set({ isLoading: true });
-        try {
-            // const response = await axiosInstance.get('/users');
-            // set({ users: response.data });
-            set({ users: [], isLoading: false });
-        } catch (error) {
-            console.error('Error fetching users:', error);
-            set({ isLoading: false });
-        }
+        set({ users: [], isLoading: false });
     },
 
     fetchMessages: async (userId: string) => {
+        // Placeholder for fetching messages
+        console.log(`Fetching messages for ${userId}`);
         set({ isLoading: true });
-        try {
-            // const response = await axiosInstance.get(`/messages/${userId}`);
-            // set({ messages: response.data });
-            set({ messages: [], isLoading: false });
-        } catch (error) {
-            console.error('Error fetching messages:', error);
-            set({ isLoading: false });
-        }
+        set({ messages: [], isLoading: false });
     },
 
     sendMessage: async (receiverId: string, content: string) => {
-        try {
-            // await axiosInstance.post('/messages', { receiverId, content });
-        } catch (error) {
-            console.error('Error sending message:', error);
-        }
+        // Placeholder for sending messages
+        console.log(`Sending message to ${receiverId}: ${content}`);
     },
 
     setUnreadCount: (count) => set({ unreadCount: count }),
